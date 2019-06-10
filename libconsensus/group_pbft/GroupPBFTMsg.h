@@ -30,8 +30,9 @@ namespace consensus
 {
 struct GroupPBFTPacketType : public PBFTPacketType
 {
-    static const int SuperSignReqPacket = 0x05;
-    static const int SuperCommitReqPacket = 0x06;
+    static const int SuperSignReqPacket = 0x04;
+    static const int SuperCommitReqPacket = 0x05;
+    static const int SuperViewChangeReqPacket = 0x06;
 };
 
 struct SuperSignReq : public PBFTMsg
@@ -45,6 +46,26 @@ struct SuperSignReq : public PBFTMsg
         block_hash = prepareReq->block_hash;
         height = prepareReq->height;
         view = globalView;
+        timestamp = u256(utcTime());
+    }
+    std::string uniqueKey() const override
+    {
+        auto uniqueKey = std::to_string(idx) + "_" + block_hash.hex() + "_" + std::to_string(view);
+        return uniqueKey;
+    }
+};
+
+struct SuperViewChangeReq : public PBFTMsg
+{
+    SuperViewChangeReq() {}
+
+    SuperViewChangeReq(int64_t const& _blockHeight, VIEWTYPE const& _view, IDXTYPE const& _nodeIdx,
+        h256 const& _hash)
+    {
+        height = _blockHeight;
+        view = _view;
+        idx = _nodeIdx;
+        block_hash = _hash;
         timestamp = u256(utcTime());
     }
     std::string uniqueKey() const override

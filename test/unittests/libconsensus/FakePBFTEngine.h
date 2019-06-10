@@ -202,7 +202,7 @@ public:
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
     void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
-    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req) const
+    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req)
     {
         std::ostringstream oss;
         return PBFTEngine::isValidPrepare(req, oss);

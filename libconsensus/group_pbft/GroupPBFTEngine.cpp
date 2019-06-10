@@ -22,9 +22,6 @@
  * @date: 2019-5-28
  */
 #include "GroupPBFTEngine.h"
-#include "GroupPBFTMsg.h"
-#include "GroupPBFTReqCache.h"
-#include <libethcore/Exceptions.h>
 using namespace dev::eth;
 
 namespace dev
@@ -35,7 +32,9 @@ void GroupPBFTEngine::start()
 {
     PBFTEngine::start();
     m_groupPBFTReqCache = std::dynamic_pointer_cast<GroupPBFTReqCache>(m_reqCache);
-    GPBFTENGINE_LOG(INFO) << "[Start GroupPBFTEngine...]";
+    m_groupTimeoutCount = m_FaultTolerance + 1;
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("Start GroupPBFTEngine")
+                          << LOG_KV("initialTimeoutCount", m_groupTimeoutCount);
 }
 
 /// resetConfig for group PBFTEngine
@@ -72,11 +71,11 @@ void GroupPBFTEngine::resetConfig()
     // obtain zone id of this node
     m_zoneId = m_idx / m_configuredGroupSize;
     // calculate current zone num
-    m_zoneNum = m_nodeNum + (m_configuredGroupSize - 1) / m_configuredGroupSize;
+    m_zoneNum = (m_nodeNum + m_configuredGroupSize - 1) / m_configuredGroupSize;
     // get zone size
-    if (m_nodeNum - m_idx < m_configuredGroupSize)
+    if (m_nodeNum - m_zoneId * m_configuredGroupSize < m_configuredGroupSize)
     {
-        m_zoneSize = m_nodeNum - m_idx;
+        m_zoneSize = m_nodeNum - m_zoneId * m_configuredGroupSize;
     }
     else
     {
@@ -116,7 +115,7 @@ void GroupPBFTEngine::resetConfig()
                           << LOG_KV("groupIdx", m_groupIdx)
                           << LOG_KV("faultTolerance", m_FaultTolerance)
                           << LOG_KV("groupFaultTolerance", m_groupFaultTolerance)
-                          << LOG_KV("gIdx", m_groupIdx) << LOG_KV("idx", m_idx);
+                          << LOG_KV("idx", m_idx);
 }
 
 /// get consensus zone:
@@ -128,20 +127,21 @@ ZONETYPE GroupPBFTEngine::getConsensusZone(int64_t const& blockNumber) const
     {
         return MAXIDX;
     }
-    return (m_globalView + blockNumber % m_zoneSwitchBlocks) % m_zoneNum;
+    return (m_globalView + blockNumber / m_zoneSwitchBlocks) % m_zoneNum;
 }
 
 // determine the given node located in the consensus zone or not
-bool GroupPBFTEngine::locatedInConsensusZone(int64_t const& blockNumber) const
+bool GroupPBFTEngine::locatedInConsensusZone(
+    int64_t const& blockNumber, ZONETYPE const& zoneId) const
 {
-    if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256)
+    if (m_cfgErr || m_highestBlock.sealer() == Invalid256)
     {
         return false;
     }
     // get the current consensus zone
     ZONETYPE consZone = getConsensusZone(blockNumber);
     // get consensus zone failed or the node is not in the consens zone
-    if (consZone == MAXIDX || consZone != m_zoneId)
+    if (consZone == MAXIDX || consZone != zoneId)
     {
         return false;
     }
@@ -152,11 +152,17 @@ bool GroupPBFTEngine::locatedInConsensusZone(int64_t const& blockNumber) const
 std::pair<bool, IDXTYPE> GroupPBFTEngine::getLeader() const
 {
     // the node is not in the consensus group
-    if (!locatedInConsensusZone(m_highestBlock.number()))
+    if (!locatedInConsensusZone(m_highestBlock.number(), m_zoneId) || m_leaderFailed)
     {
         return std::make_pair(false, MAXIDX);
     }
-    return std::make_pair(true, (m_view + m_highestBlock.number()) % m_zoneSize);
+    int64_t zoneSize = m_zoneSize;
+    int64_t zoneId = m_zoneId;
+    int64_t configuredGroupSize = m_configuredGroupSize;
+    IDXTYPE idx = (IDXTYPE)(
+        (m_currentBlockHash + (u256)m_highestBlock.number() + (u256)m_view) % (u256)zoneSize +
+        (u256)(zoneId * configuredGroupSize));
+    return std::make_pair(true, idx);
 }
 
 /// get next leader
@@ -164,17 +170,18 @@ IDXTYPE GroupPBFTEngine::getNextLeader() const
 {
     auto expectedBlockNumber = m_highestBlock.number() + 1;
     /// the next leader is not located in this Zone
-    if (!locatedInConsensusZone(expectedBlockNumber))
+    if (!locatedInConsensusZone(expectedBlockNumber, m_zoneId))
     {
         return MAXIDX;
     }
-    return (m_view + expectedBlockNumber) % m_zoneSize;
+    int64_t zoneSize = m_zoneSize;
+    return (IDXTYPE)((m_currentBlockHash + (u256)expectedBlockNumber) % (u256)(zoneSize));
 }
 
 /// get nodeIdx according to nodeID
 /// override the function to make sure the node only broadcast message to the nodes that belongs to
 /// m_zoneId
-ssize_t GroupPBFTEngine::getIndexBySealer(dev::network::NodeID const& nodeId)
+ssize_t GroupPBFTEngine::getGroupIndexBySealer(dev::network::NodeID const& nodeId)
 {
     ssize_t nodeIndex = PBFTEngine::getIndexBySealer(nodeId);
     /// observer or not in the zone
@@ -191,7 +198,7 @@ ssize_t GroupPBFTEngine::getIndexBySealer(dev::network::NodeID const& nodeId)
 }
 
 
-bool GroupPBFTEngine::broadCastMsgAmongGroups(unsigned const& packetType, std::string const& key,
+bool GroupPBFTEngine::broadCastMsgAmongGroups(const int& packetType, std::string const& key,
     bytesConstRef data, unsigned const& ttl, std::unordered_set<dev::network::NodeID> const& filter)
 {
     return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl, m_groupBroadcastFilter);
@@ -220,23 +227,27 @@ bool GroupPBFTEngine::isLeader()
 
 bool GroupPBFTEngine::locatedInConsensusZone() const
 {
-    return locatedInConsensusZone(m_highestBlock.number());
+    return locatedInConsensusZone(m_highestBlock.number(), m_zoneId);
 }
 
 
-bool GroupPBFTEngine::handlePrepareMsg(
-    std::shared_ptr<PrepareReq> prepare_req, std::string const& endpoint)
+void GroupPBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq)
 {
     // nodes of the consensus zone broadcast encoded Prepare packet to nodes located in other groups
     if (locatedInConsensusZone())
     {
         bytes prepare_data;
-        prepare_req->encode(prepare_data);
+        prepareReq->encode(prepare_data);
+        GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
+                               << LOG_KV("height", prepareReq->height)
+                               << LOG_KV("hash", prepareReq->block_hash.abridged())
+                               << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
+                               << LOG_KV("idx", m_idx);
         broadCastMsgAmongGroups(
-            GroupPBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
+            GroupPBFTPacketType::PrepareReqPacket, prepareReq->uniqueKey(), ref(prepare_data));
     }
-    return PBFTEngine::handlePrepareMsg(prepare_req, endpoint);
 }
+
 
 /**
  * @brief
@@ -291,26 +302,38 @@ void GroupPBFTEngine::printWhenCollectEnoughSuperReq(std::string const& desc, si
 /// collect superSignReq and broadcastCommitReq if collected enough superSignReq
 void GroupPBFTEngine::checkAndBackupForSuperSignEnough()
 {
+    // must collectEnough SignReq firstly
+    if (!collectEnoughSignReq(false) || !collectEnoughSuperSignReq())
+    {
+        return;
+    }
+    // broadcast commit message
     auto superSignSize =
         m_groupPBFTReqCache->getSuperSignCacheSize(m_groupPBFTReqCache->prepareCache()->block_hash);
-    // broadcast commit message
-    if (superSignSize == (size_t)(minValidGroups() - 1))
-    {
-        printWhenCollectEnoughSuperReq(
-            "checkAndBackupForSuperSignEnough: collect enough superSignReq, backup prepare request "
-            "to PBFT backup DB",
-            superSignSize);
+    printWhenCollectEnoughSuperReq(
+        "checkAndBackupForSuperSignEnough: collect enough superSignReq, backup prepare request "
+        "to PBFT backup DB",
+        superSignSize);
 
-        // backup signReq
+    // backup signReq for non-empty block
+    if (m_omitEmptyBlock && m_groupPBFTReqCache->prepareCache()->pBlock->getTransactionSize() > 0)
+    {
+        GPBFTENGINE_LOG(INFO)
+            << LOG_DESC("checkAndBackupForSuperSignEnough: update and backup commitedPrepare")
+            << LOG_KV("height", m_groupPBFTReqCache->prepareCache()->height)
+            << LOG_KV("hash", m_groupPBFTReqCache->prepareCache()->block_hash.abridged())
+            << LOG_KV("zone", m_zoneId) << LOG_KV("idx", m_idx)
+            << LOG_KV("nodeId", m_keyPair.pub().abridged());
         m_groupPBFTReqCache->updateCommittedPrepare();
         backupMsg(c_backupKeyCommitted, m_groupPBFTReqCache->committedPrepareCache());
-        // broadcast commit message
-        if (!broadcastCommitReq(*(m_groupPBFTReqCache->prepareCache())))
-        {
-            GPBFTENGINE_LOG(WARNING)
-                << LOG_DESC("checkAndBackupForSuperSignEnough: broadcastCommitReq failed");
-        }
     }
+    // broadcast commit message
+    if (!broadcastCommitReq(*(m_groupPBFTReqCache->prepareCache())))
+    {
+        GPBFTENGINE_LOG(WARNING) << LOG_DESC(
+            "checkAndBackupForSuperSignEnough: broadcastCommitReq failed");
+    }
+    checkAndSave();
 }
 
 /**
@@ -325,6 +348,25 @@ void GroupPBFTEngine::checkAndCommit()
         return;
     }
     broadcastSuperSignMsg();
+    checkAndBackupForSuperSignEnough();
+}
+
+bool GroupPBFTEngine::broadcastSuperSignMsg()
+{
+    // generate the superSignReq
+    std::shared_ptr<SuperSignReq> req = std::make_shared<SuperSignReq>(
+        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_idx));
+    // cache superSignReq
+    m_groupPBFTReqCache->addSuperSignReq(req, m_zoneId);
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndCommit, broadcast and cache SuperSignReq")
+                          << LOG_KV("height", req->height)
+                          << LOG_KV("hash", req->block_hash.abridged()) << LOG_KV("idx", m_idx)
+                          << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
+                          << LOG_KV("nodeId", m_keyPair.pub().abridged());
+    bytes encodedReq;
+    req->encode(encodedReq);
+    return broadCastMsgAmongGroups(
+        GroupPBFTPacketType::SuperSignReqPacket, req->uniqueKey(), ref(encodedReq), 2);
 }
 
 /**
@@ -339,7 +381,176 @@ void GroupPBFTEngine::checkAndSave()
         return;
     }
     broadcastSuperCommitMsg();
+    checkSuperReqAndCommitBlock();
 }
+
+bool GroupPBFTEngine::broadcastSuperCommitMsg()
+{
+    // generate SuperCommitReq
+    std::shared_ptr<SuperCommitReq> req = std::make_shared<SuperCommitReq>(
+        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_idx));
+    // cache SuperCommitReq
+    m_groupPBFTReqCache->addSuperCommitReq(req, m_zoneId);
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave, broadcast and cache SuperCommitReq")
+                          << LOG_KV("height", req->height)
+                          << LOG_KV("hash", req->block_hash.abridged()) << LOG_KV("idx", m_idx)
+                          << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
+                          << LOG_KV("nodeId", m_keyPair.pub().abridged());
+    bytes encodedReq;
+    req->encode(encodedReq);
+    return broadCastMsgAmongGroups(
+        GroupPBFTPacketType::SuperCommitReqPacket, req->uniqueKey(), ref(encodedReq), 2);
+}
+
+bool GroupPBFTEngine::handleSuperViewChangeReq(
+    std::shared_ptr<SuperViewChangeReq> superViewChangeReq, PBFTMsgPacket const& pbftMsg)
+{
+    bool valid = decodeToRequests(superViewChangeReq, ref(pbftMsg.data));
+    if (!valid)
+    {
+        return false;
+    }
+    auto zoneId = getZoneByNodeIndex(superViewChangeReq->idx);
+    std::ostringstream oss;
+    commonLogWhenHandleMsg(oss, "handleSuperViewChangeReq", zoneId, superViewChangeReq, pbftMsg);
+    CheckResult result = isValidSuperViewChangeReq(superViewChangeReq, zoneId, oss);
+    if (result == CheckResult::INVALID)
+    {
+        return false;
+    }
+    m_groupPBFTReqCache->addSuperViewChangeReq(superViewChangeReq, zoneId);
+    checkSuperViewChangeAndChangeView();
+    // this node is not located in the consensus zone and receive the superViewChange request from
+    // consensus zone
+    if (!locatedInConsensusZone() && locatedInConsensusZone(superViewChangeReq->height, zoneId))
+    {
+        GPBFTENGINE_LOG(DEBUG)
+            << LOG_DESC(
+                   "located in non-consensus zone and receive superviewchange from consensus zone")
+            << LOG_KV("consensusZone", zoneId) << LOG_KV("height", superViewChangeReq->height)
+            << LOG_KV("toView", superViewChangeReq->view)
+            << LOG_KV("genIdx", superViewChangeReq->idx)
+            << LOG_KV("hash", superViewChangeReq->block_hash.abridged())
+            << LOG_KV("curZone", m_zoneId) << LOG_KV("idx", nodeIdx());
+        // broadcast viewchange request to other nodes
+        m_toView = superViewChangeReq->view;
+        broadcastViewChange(superViewChangeReq);
+    }
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("handleSuperViewChangeReq succ") << LOG_KV("INFO", oss.str());
+    return true;
+}
+
+
+bool GroupPBFTEngine::broadcastViewChange(std::shared_ptr<SuperViewChangeReq> superViewChangeReq)
+{
+    ViewChangeReq req(m_keyPair, m_highestBlock.number(), superViewChangeReq->view, nodeIdx(),
+        m_highestBlock.hash());
+    GPBFTENGINE_LOG(DEBUG)
+        << LOG_DESC(
+               "broadcast viewchange request when receive viewchangeRequest from consensusZone")
+        << LOG_KV("curView", m_view) << LOG_KV("toView", req.view) << LOG_KV("genIdx", req.idx)
+        << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("zoneIdx", m_zoneId);
+    bytes viewChangeData;
+    req.encode(viewChangeData);
+    return broadcastMsg(PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(viewChangeData));
+}
+
+// broadcast superviewchange Req
+bool GroupPBFTEngine::broadcastSuperViewChangeReq()
+{
+    // generate superViewChangeReq
+    std::shared_ptr<SuperViewChangeReq> req = std::make_shared<SuperViewChangeReq>(
+        m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
+    // cache superViewChangeReq
+    m_groupPBFTReqCache->addSuperViewChangeReq(req, m_zoneId);
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("broadcast SuperViewChangeReq")
+                          << LOG_KV("height", req->height)
+                          << LOG_KV("hash", req->block_hash.abridged()) << LOG_KV("view", req->view)
+                          << LOG_KV("idx", m_idx) << LOG_KV("groupIdx", m_groupIdx)
+                          << LOG_KV("zoneId", m_zoneId);
+    bytes encodedData;
+    req->encode(encodedData);
+    return broadCastMsgAmongGroups(
+        GroupPBFTPacketType::SuperViewChangeReqPacket, req->uniqueKey(), ref(encodedData), 2);
+}
+
+void GroupPBFTEngine::checkAndChangeView()
+{
+    size_t count = m_groupPBFTReqCache->getViewChangeSize(m_toView);
+    if (count >= (size_t)(minValidNodes() - 1))
+    {
+        broadcastSuperViewChangeReq();
+    }
+    checkSuperViewChangeAndChangeView();
+}
+
+void GroupPBFTEngine::checkSuperViewChangeAndChangeView()
+{
+    if (!collectEnoughSuperViewChangReq())
+    {
+        return;
+    }
+#if 0
+    if (m_lastTimeout && m_groupTimeoutCount > 0)
+    {
+        m_groupTimeoutCount--;
+    }
+    // if trigger continuous number of {m_FaultTolerance + 1} timeout, switch group
+    if (m_groupTimeoutCount == 0)
+    {
+        m_globalView = m_toView;
+        m_groupTimeoutCount = m_FaultTolerance + 1;
+        GPBFTENGINE_LOG(INFO) << LOG_DESC("reset globalView")
+                              << LOG_KV("continuous timeoutCount", m_groupTimeoutCount)
+                              << LOG_KV("curGlobalView", m_globalView) << LOG_KV("idx", m_idx)
+                              << LOG_KV("zoneId", m_zoneId);
+    }
+    m_lastTimeout = true;
+#endif
+
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("changeView for collect enough SuperViewChangeReq")
+                          << LOG_KV("currentView", m_view) << LOG_KV("toView", m_toView)
+                          << LOG_KV("curConsZone", getConsensusZone(m_highestBlock.number()))
+                          << LOG_KV("curLeader", getLeader().second) << LOG_KV("idx", m_idx)
+                          << LOG_KV("zoneId", m_zoneId);
+
+    changeView();
+}
+
+CheckResult GroupPBFTEngine::isValidSuperViewChangeReq(
+    std::shared_ptr<SuperViewChangeReq> superViewChangeReq, ZONETYPE const& zoneId,
+    std::ostringstream const& oss)
+{
+    // check the viewchangeReq exists or not
+    if (m_groupPBFTReqCache->cacheExists(
+            m_groupPBFTReqCache->superViewChangeCache(), superViewChangeReq->view, zoneId))
+    {
+        GPBFTENGINE_LOG(DEBUG) << LOG_DESC("Invalid SuperViewChangeReq: Duplicated")
+                               << LOG_KV("INFO", oss.str());
+        return CheckResult::INVALID;
+    }
+    // check view(must be large than the view of this group)
+    if (superViewChangeReq->view <= m_view || superViewChangeReq->height < m_highestBlock.number())
+    {
+        GPBFTENGINE_LOG(DEBUG) << LOG_DESC("Invalid SuperViewChangeReq: invalid view or height")
+                               << LOG_KV("INFO", oss.str());
+        return CheckResult::INVALID;
+    }
+    // check blockHash
+    if (superViewChangeReq->height == m_highestBlock.number() &&
+        (superViewChangeReq->block_hash != m_highestBlock.hash() ||
+            m_blockChain->getBlockByHash(superViewChangeReq->block_hash) == nullptr))
+    {
+        GPBFTENGINE_LOG(DEBUG) << LOG_DESC("Invalid SuperViewChangeReq: invalid hash")
+                               << LOG_KV("highHash", m_highestBlock.hash().abridged())
+                               << LOG_KV("reqHash", superViewChangeReq->block_hash.abridged())
+                               << LOG_KV("height", superViewChangeReq->height)
+                               << LOG_KV("INFO", oss.str());
+        return CheckResult::INVALID;
+    }
+    return CheckResult::VALID;
+}
+
 
 bool GroupPBFTEngine::handleSuperCommitReq(
     std::shared_ptr<SuperCommitReq> superCommitReq, PBFTMsgPacket const& pbftMsg)
@@ -367,15 +578,73 @@ bool GroupPBFTEngine::handleSuperCommitReq(
     return true;
 }
 
+
+void GroupPBFTEngine::updateConsensusStatus()
+{
+    updateCurrentHash(m_highestBlock.hash());
+    PBFTEngine::updateBasicStatus();
+    m_lastTimeout = false;
+}
+
+bool GroupPBFTEngine::reportForEmptyBlock()
+{
+    if (m_groupPBFTReqCache->prepareCache()->view != m_view)
+    {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkSuperReqAndCommitBlock: InvalidView")
+                              << LOG_KV("prepView", m_groupPBFTReqCache->prepareCache()->view)
+                              << LOG_KV("view", m_view)
+                              << LOG_KV("prepHeight", m_groupPBFTReqCache->prepareCache()->height)
+                              << LOG_KV("hash",
+                                     m_groupPBFTReqCache->prepareCache()->block_hash.abridged())
+                              << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("myNode", m_keyPair.pub().abridged());
+        return false;
+    }
+    updateCurrentHash(m_groupPBFTReqCache->prepareCache()->block_hash);
+    PBFTEngine::updateBasicStatus();
+    // reset m_lastTimeout
+    m_lastTimeout = false;
+    // delete cache
+    m_groupPBFTReqCache->delCache(m_groupPBFTReqCache->prepareCache()->block_hash);
+    // delete future cache
+    m_groupPBFTReqCache->removeInvalidFutureCache(m_highestBlock);
+    return true;
+}
+
 void GroupPBFTEngine::checkSuperReqAndCommitBlock()
 {
     if (!collectEnoughSuperCommitReq())
     {
         return;
     }
+    // empty block
+    if (m_groupPBFTReqCache->prepareCache()->pBlock->getTransactionSize() == 0)
+    {
+        // check view
+        bool ret = reportForEmptyBlock();
+        if (!ret)
+        {
+            return;
+        }
+        m_emptyBlockGenerated();
+        GPBFTENGINE_LOG(INFO) << LOG_DESC("CommitEmptyBlock succ")
+                              << LOG_KV("updatedBlockHash", m_currentBlockHash)
+                              << LOG_KV("curLeader", getLeader().second);
+        return;
+    }
     auto superCommitSize = m_groupPBFTReqCache->getSizeFromCache(
         m_groupPBFTReqCache->prepareCache()->block_hash, m_groupPBFTReqCache->superCommitCache());
     PBFTEngine::checkAndCommitBlock(superCommitSize);
+}
+
+void GroupPBFTEngine::checkTimeout()
+{
+    // non-consensus group no need to checkTimeout and changeView
+    if (!locatedInConsensusZone())
+    {
+        return;
+    }
+    PBFTEngine::checkTimeout();
 }
 
 std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg)
@@ -390,6 +659,7 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
         succ = handleSuperSignReq(superSignReq, pbftMsg);
         key = superSignReq->uniqueKey();
         pbftPacket = superSignReq;
+        break;
     }
     case GroupPBFTPacketType::SuperCommitReqPacket:
     {
@@ -397,6 +667,16 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
         succ = handleSuperCommitReq(superCommitReq, pbftMsg);
         key = superCommitReq->uniqueKey();
         pbftPacket = superCommitReq;
+        break;
+    }
+    case GroupPBFTPacketType::SuperViewChangeReqPacket:
+    {
+        std::shared_ptr<SuperViewChangeReq> superViewChangeReq =
+            std::make_shared<SuperViewChangeReq>();
+        succ = handleSuperViewChangeReq(superViewChangeReq, pbftMsg);
+        key = superViewChangeReq->uniqueKey();
+        pbftPacket = superViewChangeReq;
+        break;
     }
     default:
     {
@@ -408,6 +688,21 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
         return nullptr;
     }
     return pbftPacket;
+}
+
+bool GroupPBFTEngine::checkBlock(Block const&)
+{
+    return true;
+}
+
+// only for consensus zone
+void GroupPBFTEngine::changeViewForFastViewChange()
+{
+    if (!locatedInConsensusZone())
+    {
+        return;
+    }
+    PBFTEngine::changeViewForFastViewChange();
 }
 
 }  // namespace consensus

@@ -130,6 +130,11 @@ public:
         return (utcTime() - m_timeManager.m_lastConsensusTime) >= m_timeManager.m_emptyBlockGenTime;
     }
 
+    virtual bool shouldPushMsg(byte const& packetType)
+    {
+        return (packetType <= PBFTPacketType::ViewChangeReqPacket);
+    }
+
     /// in case of the next leader packeted the number of maxTransNum transactions before the last
     /// block is consensused
     /// when sealing for the next leader,  return true only if the last block has been consensused
@@ -156,6 +161,9 @@ public:
     virtual bool shouldSeal();
     /// broadcast prepare message
     virtual bool generatePrepare(std::shared_ptr<dev::eth::Block> const& block);
+    virtual bool triggerViewChangeForEmptyBlock(std::shared_ptr<PrepareReq> prepareReq);
+
+    virtual void updateConsensusStatus();
 
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
@@ -180,7 +188,11 @@ public:
         m_onCommitBlock = _f;
     }
 
-    bool inline shouldReset(std::shared_ptr<dev::eth::Block> const& block)
+    // notify sealing to reset config after generate empty block(for GroupPBFTEngine, maybe used for
+    // PBFTEngine in the future)
+    void onEmptyBlockChanged(std::function<void()> const& _f) { m_emptyBlockGenerated = _f; }
+
+    virtual bool shouldReset(std::shared_ptr<dev::eth::Block> const& block)
     {
         return block->getTransactionSize() == 0 && m_omitEmptyBlock;
     }
@@ -207,14 +219,15 @@ protected:
     void workLoop() override;
     void handleFutureBlock();
     void collectGarbage();
-    void checkTimeout();
+    virtual void checkTimeout();
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
-    bool needOmit(std::shared_ptr<Sealing> sealing);
+
+    virtual bool fastViewChangeViewForEmptyBlock(std::shared_ptr<Sealing> sealing);
 
     void getAllNodesViewStatus(Json::Value& status);
 
@@ -271,10 +284,15 @@ protected:
 
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     virtual void checkAndSave();
-    void checkAndChangeView();
-    virtual void checkAndCommitBlock(size_t const& commitSize);
+    virtual void checkAndChangeView();
+    virtual void changeView();
+
+    virtual bool checkAndCommitBlock(size_t const& commitSize);
 
 protected:
+    // update basic status
+    void updateBasicStatus();
+
     void initPBFTEnv(unsigned _view_timeout);
     /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
     void resetConfig() override;
@@ -401,7 +419,7 @@ protected:
     }
 
     /// check the specified prepareReq is valid or not
-    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss) const;
+    virtual CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss);
 
     template <class T>
     inline CheckResult checkBasic(
@@ -566,7 +584,7 @@ protected:
         return true;
     }
 
-    inline bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
+    virtual bool isValidLeader(std::shared_ptr<PrepareReq> const& req) const
     {
         auto leader = getLeader();
         /// get leader failed or this prepareReq is not broadcasted from leader
@@ -580,10 +598,10 @@ protected:
 
     void checkSealerList(dev::eth::Block const& block);
     /// check block
-    bool checkBlock(dev::eth::Block const& block);
+    virtual bool checkBlock(dev::eth::Block const& block);
     void execBlock(
         std::shared_ptr<Sealing> sealing, std::shared_ptr<PrepareReq> req, std::ostringstream& oss);
-    void changeViewForFastViewChange()
+    virtual void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
         m_fastViewChange = true;
@@ -639,6 +657,8 @@ protected:
         m_onCommitBlock = nullptr;
 
     std::function<ssize_t(dev::network::NodeID const&)> m_broadcastFilter = nullptr;
+
+    std::function<void()> m_emptyBlockGenerated = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout

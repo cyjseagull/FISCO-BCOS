@@ -265,6 +265,18 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _ms
     }
 }
 
+bool PBFTEngine::triggerViewChangeForEmptyBlock(std::shared_ptr<PrepareReq> prepareReq)
+{
+    if (prepareReq->pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
+    {
+        m_leaderFailed = true;
+        changeViewForFastViewChange();
+        m_timeManager.m_changeCycle = 0;
+        return true;
+    }
+    return false;
+}
+
 /// sealing the generated block into prepareReq and push its to msgQueue
 bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
 {
@@ -280,11 +292,9 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
         broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
     if (succ)
     {
-        if (prepare_req->pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
+        bool ret = triggerViewChangeForEmptyBlock(prepare_req);
+        if (ret)
         {
-            m_leaderFailed = true;
-            changeViewForFastViewChange();
-            m_timeManager.m_changeCycle = 0;
             return true;
         }
         handlePrepareMsg(prepare_req);
@@ -499,8 +509,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
  * @return true: the specified prepareReq is valid
  * @return false: the specified prepareReq is invalid
  */
-CheckResult PBFTEngine::isValidPrepare(
-    std::shared_ptr<PrepareReq> req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss)
 {
     if (m_reqCache->isExistPrepare(req))
     {
@@ -736,20 +745,6 @@ void PBFTEngine::execBlock(
         << LOG_KV("totalCost", utcTime() - start_time);
 }
 
-/// check whether the block is empty
-bool PBFTEngine::needOmit(std::shared_ptr<Sealing> sealing)
-{
-    if (sealing->block->getTransactionSize() == 0 && m_omitEmptyBlock)
-    {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("needOmit")
-                              << LOG_KV("blkNum", sealing->block->blockHeader().number())
-                              << LOG_KV("hash", sealing->block->blockHeader().hash().abridged())
-                              << LOG_KV("nodeIdx", nodeIdx())
-                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        return true;
-    }
-    return false;
-}
 
 /**
  * @brief: this function is called when receive-given-protocol related message from the network
@@ -777,7 +772,7 @@ void PBFTEngine::onRecvPBFTMessage(
     {
         return;
     }
-    if (pbft_msg->packet_id <= PBFTPacketType::ViewChangeReqPacket)
+    if (shouldPushMsg(pbft_msg->packet_id))
     {
         m_msgQueue.push(*pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
@@ -802,6 +797,24 @@ bool PBFTEngine::handlePrepareMsg(
         return false;
     }
     return handlePrepareMsg(prepare_req, pbftMsg.endpoint);
+}
+
+
+bool PBFTEngine::fastViewChangeViewForEmptyBlock(std::shared_ptr<Sealing> sealing)
+{
+    /// whether to omit empty block
+    if (sealing->block->getTransactionSize() == 0 && m_omitEmptyBlock)
+    {
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("needOmit")
+                              << LOG_KV("blkNum", sealing->block->blockHeader().number())
+                              << LOG_KV("hash", sealing->block->blockHeader().hash().abridged())
+                              << LOG_KV("nodeIdx", nodeIdx())
+                              << LOG_KV("myNode", m_keyPair.pub().abridged());
+        changeViewForFastViewChange();
+        m_timeManager.m_changeCycle = 0;
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -861,13 +874,10 @@ bool PBFTEngine::handlePrepareMsg(
         return true;
     }
     /// whether to omit empty block
-    if (needOmit(workingSealing))
+    if (fastViewChangeViewForEmptyBlock(workingSealing))
     {
-        changeViewForFastViewChange();
-        m_timeManager.m_changeCycle = 0;
         return true;
     }
-
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     std::shared_ptr<PrepareReq> sign_prepare =
@@ -938,7 +948,7 @@ void PBFTEngine::checkAndCommit()
 }
 
 
-void PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
+bool PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
 {
     auto record_time = utcTime();
     auto start_commit_time = utcTime();
@@ -957,7 +967,7 @@ void PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                               << LOG_KV("hash", m_reqCache->prepareCache()->block_hash.abridged())
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("myNode", m_keyPair.pub().abridged());
-        return;
+        return false;
     }
     /// add sign-list into the block header
     if (m_reqCache->prepareCache()->height > m_highestBlock.number())
@@ -996,6 +1006,7 @@ void PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                                  << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
             m_reqCache->delCache(m_reqCache->prepareCache()->block_hash);
             m_reqCache->removeInvalidFutureCache(m_highestBlock);
+            return true;
         }
         else
         {
@@ -1022,6 +1033,7 @@ void PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
+    return false;
 }
 
 /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
@@ -1041,6 +1053,23 @@ void PBFTEngine::reportBlock(Block const& block)
     Guard l(m_mutex);
     reportBlockWithoutLock(block);
 }
+
+void PBFTEngine::updateConsensusStatus()
+{
+    m_view = m_toView = 0;
+    updateBasicStatus();
+}
+
+void PBFTEngine::updateBasicStatus()
+{
+    m_leaderFailed = false;
+    m_timeManager.m_lastConsensusTime = utcTime();
+    m_timeManager.m_changeCycle = 0;
+    /// delete invalid view change requests from the cache
+    m_reqCache->delInvalidViewChange(m_highestBlock);
+}
+
+
 /// update the context of PBFT after commit a block into the block-chain
 /// 1. update the highest to new-committed blockHeader
 /// 2. update m_view/m_toView/m_leaderFailed/m_lastConsensusTime/m_consensusBlockNumber
@@ -1062,13 +1091,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         m_highestBlock = block.blockHeader();
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
-            m_view = m_toView = 0;
-            m_leaderFailed = false;
-            m_timeManager.m_lastConsensusTime = utcTime();
-            m_timeManager.m_changeCycle = 0;
+            updateConsensusStatus();
             m_consensusBlockNumber = m_highestBlock.number() + 1;
-            /// delete invalid view change requests from the cache
-            m_reqCache->delInvalidViewChange(m_highestBlock);
         }
         resetConfig();
         m_reqCache->delCache(m_highestBlock.hash());
@@ -1334,59 +1358,63 @@ void PBFTEngine::catchupView(std::shared_ptr<ViewChangeReq> req, std::ostringstr
     }
 }
 
+void PBFTEngine::changeView()
+{
+    /// reach to consensue dure to fast view change
+    if (m_timeManager.m_lastSignTime == 0)
+    {
+        m_fastViewChange = false;
+    }
+    auto orgChangeCycle = m_timeManager.m_changeCycle;
+
+    /// problem:
+    /// 1. there are 0, 1, 2, 3 four nodes, the 2nd and 3rd nodes are off, the 0th and 1st nodes
+    /// are wait and increase the m_toView always
+    /// 2. the 2nd start up and trigger fast view change, the three online nodes reach a
+    /// consensus at a new view, but the current leader is 3rd
+    /// 3. since 0th and 1st pay a lot of time to timeout and increase the toView, while 3rd
+    /// pays little time to timeout and increase the toView, the toView of 0th and 1st will
+    /// always less than 2nd, and the network can never reach consensus at a given view
+
+    /// solution:
+    /// 1. if m_toView is equal to (m_view + 1), that means that some exceptions happened to
+    /// block execution, but the network is OK to reach a new view, which equal to m_view + 1,
+    /// in this case, we shouldn't update m_changeCycle to 0 in consideration of block execution
+    /// may cause more time
+
+    /// 2. if m_toView is larger than (m_view + 1), that means that the network is not ok to
+    /// reach a new view, and the related nodes have modifing toView always, and if the network
+    /// recovers, we should reset m_changeCycle to 1 in case of more timeout wait if the leader
+    /// if off after fast view change
+
+    /// potential problem:
+    /// execution speed differences among nodes may cause fast view change of the faster node
+    /// the faster nodes may have a different cycle compared to other nodes
+    if (m_toView > m_view + 1)
+    {
+        m_timeManager.m_changeCycle = 1;
+        PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView, update m_changeCycle to 1");
+    }
+    PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
+                         << LOG_KV("org_view", m_view) << LOG_KV("org_changeCycle", orgChangeCycle)
+                         << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
+                         << LOG_KV("to_view", m_toView);
+
+
+    m_leaderFailed = false;
+    m_timeManager.m_lastConsensusTime = utcTime();
+    m_view = m_toView;
+    m_notifyNextLeaderSeal = false;
+    m_reqCache->triggerViewChange(m_view);
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+}
+
 void PBFTEngine::checkAndChangeView()
 {
     IDXTYPE count = m_reqCache->getViewChangeSize(m_toView);
     if (count >= minValidNodes() - 1)
     {
-        /// reach to consensue dure to fast view change
-        if (m_timeManager.m_lastSignTime == 0)
-        {
-            m_fastViewChange = false;
-        }
-        auto orgChangeCycle = m_timeManager.m_changeCycle;
-
-        /// problem:
-        /// 1. there are 0, 1, 2, 3 four nodes, the 2nd and 3rd nodes are off, the 0th and 1st nodes
-        /// are wait and increase the m_toView always
-        /// 2. the 2nd start up and trigger fast view change, the three online nodes reach a
-        /// consensus at a new view, but the current leader is 3rd
-        /// 3. since 0th and 1st pay a lot of time to timeout and increase the toView, while 3rd
-        /// pays little time to timeout and increase the toView, the toView of 0th and 1st will
-        /// always less than 2nd, and the network can never reach consensus at a given view
-
-        /// solution:
-        /// 1. if m_toView is equal to (m_view + 1), that means that some exceptions happened to
-        /// block execution, but the network is OK to reach a new view, which equal to m_view + 1,
-        /// in this case, we shouldn't update m_changeCycle to 0 in consideration of block execution
-        /// may cause more time
-
-        /// 2. if m_toView is larger than (m_view + 1), that means that the network is not ok to
-        /// reach a new view, and the related nodes have modifing toView always, and if the network
-        /// recovers, we should reset m_changeCycle to 1 in case of more timeout wait if the leader
-        /// if off after fast view change
-
-        /// potential problem:
-        /// execution speed differences among nodes may cause fast view change of the faster node
-        /// the faster nodes may have a different cycle compared to other nodes
-        if (m_toView > m_view + 1)
-        {
-            m_timeManager.m_changeCycle = 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView, update m_changeCycle to 1");
-        }
-        PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
-                             << LOG_KV("org_view", m_view)
-                             << LOG_KV("org_changeCycle", orgChangeCycle)
-                             << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
-                             << LOG_KV("to_view", m_toView);
-
-
-        m_leaderFailed = false;
-        m_timeManager.m_lastConsensusTime = utcTime();
-        m_view = m_toView;
-        m_notifyNextLeaderSeal = false;
-        m_reqCache->triggerViewChange(m_view);
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        changeView();
     }
 }
 

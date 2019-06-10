@@ -25,6 +25,8 @@
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libconfig/GlobalConfigure.h>
+#include <libconsensus/group_pbft/GroupPBFTEngineFactory.h>
+#include <libconsensus/group_pbft/GroupPBFTReqFactory.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
@@ -109,9 +111,6 @@ void Ledger::initGenesisConfig(std::string const& configPath)
 {
     try
     {
-        Ledger_LOG(INFO) << LOG_BADGE("initGenesisConfig")
-                         << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig")
-                         << LOG_KV("configFile", configPath);
         ptree pt;
         /// read the configuration file for a specified group
         read_ini(configPath, pt);
@@ -121,14 +120,39 @@ void Ledger::initGenesisConfig(std::string const& configPath)
         initTxConfig(pt);
         /// use UTCTime directly as timeStamp in case of the clock differences between machines
         m_param->mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
-        Ledger_LOG(DEBUG) << LOG_BADGE("initGenesisConfig")
-                          << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp);
+
         /// set state db related param
         m_param->mutableStateParam().type = pt.get<std::string>("state.type", "storage");
         // Compatibility with previous versions RC2/RC1
         m_param->mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         m_param->mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         m_param->mutableStorageParam().maxRetry = pt.get<int>("storage.max_retry", 100);
+
+        // params for group_pbft
+        m_param->mutableConsensusParam().groupSize = pt.get<int64_t>("consensus.group_size", 1);
+        if (m_param->mutableConsensusParam().groupSize < 0)
+        {
+            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
+                                  << errinfo_comment("groupSize must be not smaller than 0"));
+        }
+        m_param->mutableConsensusParam().switchBlockNum =
+            pt.get<int64_t>("consensus.switch_blocks", 10);
+        if (m_param->mutableConsensusParam().switchBlockNum < 0)
+        {
+            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
+                                  << errinfo_comment("switchBlockNum must be not smaller than 0"));
+        }
+
+        Ledger_LOG(INFO) << LOG_BADGE("initGenesisConfig")
+                         << LOG_DESC("initConsensusConfig/initDBConfig/initTxConfig")
+                         << LOG_KV("configFile", configPath)
+                         << LOG_KV("timestamp", m_param->mutableGenesisParam().timeStamp)
+                         << LOG_KV("stateType", m_param->mutableStateParam().type)
+                         << LOG_KV("storageType", m_param->mutableStorageParam().type)
+                         << LOG_KV("topic", m_param->mutableStorageParam().topic)
+                         << LOG_KV("maxRetry", m_param->mutableStorageParam().maxRetry)
+                         << LOG_KV("groupSize", m_param->mutableConsensusParam().groupSize)
+                         << LOG_KV("switchBlocks", m_param->mutableConsensusParam().switchBlockNum);
     }
     catch (std::exception& e)
     {
@@ -516,6 +540,11 @@ std::shared_ptr<PBFTEngineFactory> Ledger::createPBFTEngineFactory()
     {
         return std::make_shared<PBFTEngineFactory>();
     }
+    else if (dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
+    {
+        return std::make_shared<GroupPBFTEngineFactory>();
+    }
     return nullptr;
 }
 
@@ -525,7 +554,42 @@ std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
     {
         return std::make_shared<PBFTReqFactory>();
     }
+    else if (dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
+    {
+        return std::make_shared<GroupPBFTReqFactory>();
+    }
     return nullptr;
+}
+
+void Ledger::initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
+{
+    /// set the range of block generation time
+    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
+    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
+
+    pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
+    pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
+
+    std::shared_ptr<PBFTReqFactory> pbftReqFactory = createPBFTReqFactory();
+    pbftEngine->setPBFTReqFactory(pbftReqFactory);
+}
+
+void Ledger::initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "group_pbft") != 0)
+    {
+        return;
+    }
+    Ledger_LOG(DEBUG) << LOG_BADGE("initGroupPBFTEngine")
+                      << LOG_KV("configuredGroupSize", m_param->mutableConsensusParam().groupSize)
+                      << LOG_KV("switchBlockNum", m_param->mutableConsensusParam().switchBlockNum);
+    std::shared_ptr<GroupPBFTEngine> groupPBFTEngine =
+        std::dynamic_pointer_cast<GroupPBFTEngine>(pbftEngine);
+    assert(groupPBFTEngine);
+    groupPBFTEngine->setGroupSize(m_param->mutableConsensusParam().groupSize);
+    groupPBFTEngine->setConsensusZoneSwitchBlockNumber(
+        m_param->mutableConsensusParam().switchBlockNum);
 }
 
 /**
@@ -564,16 +628,9 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
 
-    /// set params for PBFTEngine
-    /// set the range of block generation time
-    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
-    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
+    initPBFTEngine(pbftEngine);
+    initGroupPBFTEngine(pbftEngine);
 
-    pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
-    pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
-
-    std::shared_ptr<PBFTReqFactory> pbftReqFactory = createPBFTReqFactory();
-    pbftEngine->setPBFTReqFactory(pbftReqFactory);
     return pbftSealer;
 }
 
@@ -590,10 +647,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer")
                       << LOG_KV("Protocol", protocol_id);
-    // auto intervalBlockTime = g_BCOSConfig.c_intervalBlockTime;
-    // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
-    //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
-    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().sealerList);
     std::shared_ptr<Sealer> raftSealer =
         std::make_shared<RaftSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
@@ -613,8 +666,11 @@ bool Ledger::consensusInitFactory()
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create raft");
         m_sealer = createRaftSealer();
     }
-    // create pbft
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    // creat pbft or group_pbft
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
+                 0 ||
+             dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         /// create PBFTSealer
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create pbft!");

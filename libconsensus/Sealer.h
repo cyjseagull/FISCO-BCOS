@@ -87,7 +87,6 @@ public:
     {
         m_syncTxPool = true;
         m_signalled.notify_all();
-        m_blockSignalled.notify_all();
     }
     virtual void onBlockChanged()
     {

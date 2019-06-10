@@ -51,6 +51,16 @@ public:
         m_superCommitCache[req->block_hash][zoneId] = req;
     }
 
+    void addSuperViewChangeReq(std::shared_ptr<SuperViewChangeReq> req, ZONETYPE const& zoneId)
+    {
+        m_superViewChangeCache[req->view][zoneId] = req;
+    }
+
+    size_t getSuperViewChangeSize(VIEWTYPE const& toView) const
+    {
+        return getSizeFromCache(toView, m_superViewChangeCache);
+    }
+
     size_t getSuperSignCacheSize(h256 const& blockHash) const
     {
         return getSizeFromCache(blockHash, m_superSignCache);
@@ -83,6 +93,37 @@ public:
         return m_commitCache;
     }
 
+    std::unordered_map<VIEWTYPE,
+        std::unordered_map<ZONETYPE, std::shared_ptr<SuperViewChangeReq>>> const&
+    superViewChangeCache()
+    {
+        return m_superViewChangeCache;
+    }
+
+    void triggerViewChange(VIEWTYPE const& curView) override
+    {
+        PBFTReqCache::triggerViewChange(curView);
+        m_superSignCache.clear();
+        m_superCommitCache.clear();
+        return removeInvalidSuperViewChangeReq(curView);
+    }
+
+private:
+    void removeInvalidSuperViewChangeReq(VIEWTYPE const& curView)
+    {
+        for (auto it = m_superViewChangeCache.begin(); it != m_superViewChangeCache.end();)
+        {
+            if (it->first <= curView)
+            {
+                it = m_superViewChangeCache.erase(it);
+            }
+            else
+            {
+                it++;
+            }
+        }
+    }
+
 protected:
     // cache for SuperSignReq
     std::unordered_map<h256, std::unordered_map<ZONETYPE, std::shared_ptr<SuperSignReq>>>
@@ -90,6 +131,9 @@ protected:
     // cache for SuperCommitReq
     std::unordered_map<h256, std::unordered_map<ZONETYPE, std::shared_ptr<SuperCommitReq>>>
         m_superCommitCache;
+    // cache for SuperViewChangeReq
+    std::unordered_map<VIEWTYPE, std::unordered_map<ZONETYPE, std::shared_ptr<SuperViewChangeReq>>>
+        m_superViewChangeCache;
 };
 }  // namespace consensus
 }  // namespace dev

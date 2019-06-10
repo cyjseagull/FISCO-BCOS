@@ -62,11 +62,16 @@ public:
         m_pbftEngine = m_pbftEngineFactory->createPBFTEngine(_service, _txPool, _blockChain,
             _blockSync, _blockVerifier, _protocolId, _baseDir, _keyPair, _sealerList);
         m_consensusEngine = m_pbftEngine;
+
         /// called by viewchange procedure to reset block when timeout
         m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
+
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
             boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+
+        // called when generate empty block
+        m_pbftEngine->onEmptyBlockChanged(boost::bind(&PBFTSealer::onBlockChanged, this));
 
         /// set thread name for PBFTSealer
         std::string threadName = "PBFTSeal-" + std::to_string(m_pbftEngine->groupId());
