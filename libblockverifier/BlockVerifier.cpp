@@ -42,12 +42,12 @@ using namespace dev::storage;
 ExecutiveContext::Ptr BlockVerifier::executeBlock(
     Block::Ptr block, BlockInfo const& parentBlockInfo)
 {
-    if (block.blockHeader().number() < m_executingNumber)
+    if (block->blockHeader().number() < m_executingNumber)
     {
         return nullptr;
     }
     std::lock_guard<std::mutex> l(m_executingMutex);
-    if (block.blockHeader().number() < m_executingNumber)
+    if (block->blockHeader().number() < m_executingNumber)
     {
         return nullptr;
     }
@@ -69,7 +69,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(
                                  << LOG_KV("blockNumber", block.blockHeader().number());
         return nullptr;
     }
-    m_executingNumber = block.blockHeader().number();
+    m_executingNumber = block->blockHeader().number();
     return context;
 }
 

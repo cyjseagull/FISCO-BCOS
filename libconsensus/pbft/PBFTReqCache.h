@@ -399,6 +399,7 @@ protected:
     {
         ReadGuard l(mutex);
         Json::Value tmp_array(Json::arrayValue);
+        Json::Value tmp_obj;
         for (auto i : cache)
         {
             Json::Value entry;
