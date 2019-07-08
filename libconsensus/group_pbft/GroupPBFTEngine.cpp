@@ -690,8 +690,30 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
     return pbftPacket;
 }
 
-bool GroupPBFTEngine::checkBlock(Block const&)
+bool GroupPBFTEngine::checkBlock(Block const& block)
 {
+    if (block.blockHeader().number() <= m_blockChain->number())
+    {
+        return false;
+    }
+    resetConfig();
+    auto sealers = sealerList();
+    /// ignore the genesis block
+    if (block.blockHeader().number() == 0)
+    {
+        return true;
+    }
+    {
+        if (sealers != block.blockHeader().sealerList())
+        {
+            GPBFTENGINE_LOG(ERROR)
+                << LOG_DESC("checkBlock: wrong sealers") << LOG_KV("Nsealer", sealers.size())
+                << LOG_KV("NBlockSealer", block.blockHeader().sealerList().size())
+                << LOG_KV("hash", block.blockHeader().hash().abridged())
+                << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
+            return false;
+        }
+    }
     return true;
 }
 

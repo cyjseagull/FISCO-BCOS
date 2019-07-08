@@ -312,7 +312,7 @@ protected:
 
     // TODO: remove this logic after add at least (2*f + 1) signatures at the end of the generated
     // block
-    bool checkBlock(dev::eth::Block const&) override;
+    bool checkBlock(dev::eth::Block const& block) override;
 
     void changeViewForFastViewChange() override;
 
