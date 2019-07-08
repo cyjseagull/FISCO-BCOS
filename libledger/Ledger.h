@@ -28,6 +28,7 @@
 #include "LedgerParamInterface.h"
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngineFactory.h>
+#include <libconsensus/pbft/PBFTMsgFactory.h>
 #include <libconsensus/pbft/PBFTReqFactory.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
@@ -148,6 +149,8 @@ protected:
 
     std::shared_ptr<dev::consensus::PBFTEngineFactory> createPBFTEngineFactory();
     std::shared_ptr<dev::consensus::PBFTReqFactory> createPBFTReqFactory();
+
+    std::shared_ptr<dev::consensus::PBFTMsgFactoryInterface> createPBFTMsgFactory();
     void initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
     void initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
 

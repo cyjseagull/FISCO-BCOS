@@ -35,6 +35,49 @@ struct GroupPBFTPacketType : public PBFTPacketType
     static const int SuperViewChangeReqPacket = 0x06;
 };
 
+struct GroupViewChangeReq : public ViewChangeReq
+{
+    uint8_t type = 0;
+
+    GroupViewChangeReq() = default;
+    GroupViewChangeReq(KeyPair const& keyPair, int64_t const& _height, VIEWTYPE const _view,
+        IDXTYPE const& _idx, h256 const& _hash, uint8_t global = 0)
+      : ViewChangeReq(keyPair, _height, _view, _idx, _hash), type(global)
+    {}
+
+    void setType(uint8_t const& _type) { type = _type; }
+
+    bool isGlobal() override
+    {
+        if (type == 0)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    void streamRLPFields(RLPStream& _s) const override
+    {
+        _s << height << view << idx << timestamp << block_hash << sig.asBytes() << sig2.asBytes()
+           << type;
+    }
+
+    /// populate specified rlp into PBFTMsg object
+    void populate(RLP const& rlp) override
+    {
+        try
+        {
+            ViewChangeReq::populate(rlp);
+            type = rlp[7].toInt<uint8_t>();
+        }
+        catch (Exception const& _e)
+        {
+            LOG(ERROR) << "populate GroupViewChangeReq failed";
+            throw _e;
+        }
+    }
+};
+
 struct SuperSignReq : public PBFTMsg
 {
     SuperSignReq() {}
@@ -55,19 +98,14 @@ struct SuperSignReq : public PBFTMsg
     }
 };
 
-struct SuperViewChangeReq : public PBFTMsg
+struct SuperViewChangeReq : public GroupViewChangeReq
 {
     SuperViewChangeReq() {}
 
-    SuperViewChangeReq(int64_t const& _blockHeight, VIEWTYPE const& _view, IDXTYPE const& _nodeIdx,
-        h256 const& _hash)
-    {
-        height = _blockHeight;
-        view = _view;
-        idx = _nodeIdx;
-        block_hash = _hash;
-        timestamp = u256(utcTime());
-    }
+    SuperViewChangeReq(KeyPair const& keyPair, int64_t const& _height, VIEWTYPE const _view,
+        IDXTYPE const& _idx, h256 const& _hash, uint8_t type = 0)
+      : GroupViewChangeReq(keyPair, _height, _view, _idx, _hash, type)
+    {}
     std::string uniqueKey() const override
     {
         auto uniqueKey = std::to_string(idx) + "_" + block_hash.hex() + "_" + std::to_string(view);

@@ -24,6 +24,7 @@
 #pragma once
 #include "Common.h"
 #include "GroupPBFTMsg.h"
+#include "GroupPBFTMsgFactory.h"
 #include "GroupPBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 namespace dev
@@ -291,7 +292,7 @@ protected:
         std::shared_ptr<SuperViewChangeReq> superViewChangeReq, PBFTMsgPacket const& pbftMsg);
     CheckResult isValidSuperViewChangeReq(std::shared_ptr<SuperViewChangeReq> superViewChangeReq,
         ZONETYPE const& zoneId, std::ostringstream const& oss);
-    virtual bool broadcastSuperViewChangeReq();
+    virtual bool broadcastSuperViewChangeReq(uint8_t type = 0);
 
     void checkAndChangeView() override;
     virtual void checkSuperViewChangeAndChangeView();
@@ -314,7 +315,17 @@ protected:
     // block
     bool checkBlock(dev::eth::Block const& block) override;
 
-    void changeViewForFastViewChange() override;
+    bool shouldReportBlock(dev::eth::Block const& block) const override
+    {
+        if (m_currentBlockHash == 0 && m_blockChain->number() == 0)
+        {
+            return true;
+        }
+        return (m_highestBlock.number() < block.blockHeader().number());
+    }
+
+    void initPBFTCacheObject() override;
+    virtual bool broadcastGlobalViewChangeReq();
 
 private:
     template <class T, class S>
@@ -354,14 +365,14 @@ protected:
     std::atomic<int64_t> m_zoneNum = {0};
     /// maxmum fault-tolerance inner a given group
     std::atomic<int64_t> m_FaultTolerance = {0};
+    std::atomic<int64_t> m_groupSwitchCycle = {0};
     /// maxmum fault-tolerance among groups
     std::atomic<int64_t> m_groupFaultTolerance = {0};
     std::atomic<int64_t> m_zoneSwitchBlocks = {0};
 
     std::atomic<VIEWTYPE> m_globalView = {0};
-    // only trigger the number of {m_FaultTolerance+1} timeout will cause group switch
-    std::atomic<int64_t> m_groupTimeoutCount = {0};
     std::atomic_bool m_lastTimeout = {false};
+
 
     // used to calculate leader, updated when commit succ
     u256 m_currentBlockHash = 0;
@@ -375,6 +386,7 @@ protected:
 
     // pointers
     std::shared_ptr<GroupPBFTReqCache> m_groupPBFTReqCache = nullptr;
+    std::shared_ptr<GroupPBFTMsgFactory> m_groupPBFTMsgFactory = nullptr;
 };
 }  // namespace consensus
 }  // namespace dev

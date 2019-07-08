@@ -44,21 +44,41 @@ public:
 
     void addSuperSignReq(std::shared_ptr<SuperSignReq> req, ZONETYPE const& zoneId)
     {
+        GPBFTREQCACHE_LOG(DEBUG) << LOG_DESC("addSuperSignReq") << LOG_KV("height", req->height)
+                                 << LOG_KV("genZone", zoneId) << LOG_KV("genIdx", req->idx)
+                                 << LOG_KV("hash", req->block_hash.abridged());
         m_superSignCache[req->block_hash][zoneId] = req;
     }
     void addSuperCommitReq(std::shared_ptr<SuperCommitReq> req, ZONETYPE const& zoneId)
     {
+        GPBFTREQCACHE_LOG(DEBUG) << LOG_DESC("addSuperCommitReq") << LOG_KV("height", req->height)
+                                 << LOG_KV("genZone", zoneId) << LOG_KV("genIdx", req->idx)
+                                 << LOG_KV("hash", req->block_hash.abridged());
         m_superCommitCache[req->block_hash][zoneId] = req;
     }
 
     void addSuperViewChangeReq(std::shared_ptr<SuperViewChangeReq> req, ZONETYPE const& zoneId)
     {
+        GPBFTREQCACHE_LOG(DEBUG) << LOG_DESC("addSuperViewChangeReq")
+                                 << LOG_KV("height", req->height) << LOG_KV("view", req->view)
+                                 << LOG_KV("genZone", zoneId) << LOG_KV("genIdx", req->idx)
+                                 << LOG_KV("hash", req->block_hash.abridged());
         m_superViewChangeCache[req->view][zoneId] = req;
     }
 
     size_t getSuperViewChangeSize(VIEWTYPE const& toView) const
     {
         return getSizeFromCache(toView, m_superViewChangeCache);
+    }
+
+    size_t getGlobalViewChangeSize(VIEWTYPE const& toView) const
+    {
+        return getGlobalViewChangeSizeFromCache(toView, m_recvViewChangeReq);
+    }
+
+    size_t getGlobalSuperViewChangeSize(VIEWTYPE const& toView) const
+    {
+        return getGlobalViewChangeSizeFromCache(toView, m_superViewChangeCache);
     }
 
     size_t getSuperSignCacheSize(h256 const& blockHash) const
@@ -108,7 +128,68 @@ public:
         return removeInvalidSuperViewChangeReq(curView);
     }
 
+    void removeInvalidViewChange(
+        VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock) override
+    {
+        // remove invalid viewchangeReq
+        PBFTReqCache::removeInvalidViewChange(view, highestBlock);
+        // remove invalid superviewchangeReq
+        removeInvalidSuperViewChangeReq(view, highestBlock);
+    }
+
+    void delInvalidViewChange(dev::eth::BlockHeader const& curHeader) override
+    {
+        PBFTReqCache::removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
+        PBFTReqCache::removeInvalidEntryFromCache(curHeader, m_superViewChangeCache);
+    }
+
 private:
+    template <typename T, typename S>
+    inline size_t getGlobalViewChangeSizeFromCache(T const& key, S& cache) const
+    {
+        size_t count = 0;
+        auto it = cache.find(key);
+        if (it != cache.end())
+        {
+            for (auto subIt = it->second.begin(); subIt != it->second.end(); subIt++)
+            {
+                if (subIt->second->isGlobal())
+                {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    void removeInvalidSuperViewChangeReq(
+        VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock)
+    {
+        auto it = m_superViewChangeCache.find(view);
+        if (it == m_superViewChangeCache.end())
+        {
+            return;
+        }
+        for (auto pSuperView = it->second.begin(); pSuperView != it->second.end();)
+        {
+            // remove invalid superViewChangeRequest with small block number
+            if (pSuperView->second->height < highestBlock.number())
+            {
+                pSuperView = it->second.erase(pSuperView);
+            }
+            else if (pSuperView->second->height == highestBlock.number() &&
+                     pSuperView->second->block_hash != highestBlock.hash())
+            {
+                pSuperView = it->second.erase(pSuperView);
+            }
+            else
+            {
+                pSuperView++;
+            }
+        }
+    }
+
+
     void removeInvalidSuperViewChangeReq(VIEWTYPE const& curView)
     {
         for (auto it = m_superViewChangeCache.begin(); it != m_superViewChangeCache.end();)

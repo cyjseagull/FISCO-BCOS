@@ -439,6 +439,8 @@ struct ViewChangeReq : public PBFTMsg
         sig = signHash(block_hash, keyPair);
         sig2 = signHash(fieldsWithoutBlock(), keyPair);
     }
+
+    virtual bool isGlobal() { return false; }
 };
 }  // namespace consensus
 }  // namespace dev

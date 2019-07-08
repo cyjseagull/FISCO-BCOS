@@ -26,6 +26,7 @@
 #include <libblockverifier/BlockVerifier.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/group_pbft/GroupPBFTEngineFactory.h>
+#include <libconsensus/group_pbft/GroupPBFTMsgFactory.h>
 #include <libconsensus/group_pbft/GroupPBFTReqFactory.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
@@ -562,6 +563,20 @@ std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
     return nullptr;
 }
 
+std::shared_ptr<PBFTMsgFactoryInterface> Ledger::createPBFTMsgFactory()
+{
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    {
+        return std::make_shared<PBFTMsgFactory>();
+    }
+    else if (dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
+    {
+        return std::make_shared<GroupPBFTMsgFactory>();
+    }
+    return nullptr;
+}
+
 void Ledger::initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
 {
     /// set the range of block generation time
@@ -573,6 +588,8 @@ void Ledger::initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngi
 
     std::shared_ptr<PBFTReqFactory> pbftReqFactory = createPBFTReqFactory();
     pbftEngine->setPBFTReqFactory(pbftReqFactory);
+    std::shared_ptr<PBFTMsgFactoryInterface> pbftMsgFactory = createPBFTMsgFactory();
+    pbftEngine->setPBFTMsgFactory(pbftMsgFactory);
 }
 
 void Ledger::initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)

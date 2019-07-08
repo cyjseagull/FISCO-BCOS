@@ -31,10 +31,14 @@ namespace consensus
 void GroupPBFTEngine::start()
 {
     PBFTEngine::start();
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("Start GroupPBFTEngine");
+}
+
+void GroupPBFTEngine::initPBFTCacheObject()
+{
+    PBFTEngine::initPBFTCacheObject();
     m_groupPBFTReqCache = std::dynamic_pointer_cast<GroupPBFTReqCache>(m_reqCache);
-    m_groupTimeoutCount = m_FaultTolerance + 1;
-    GPBFTENGINE_LOG(INFO) << LOG_DESC("Start GroupPBFTEngine")
-                          << LOG_KV("initialTimeoutCount", m_groupTimeoutCount);
+    m_groupPBFTMsgFactory = std::dynamic_pointer_cast<GroupPBFTMsgFactory>(m_pbftMsgFactory);
 }
 
 /// resetConfig for group PBFTEngine
@@ -85,6 +89,7 @@ void GroupPBFTEngine::resetConfig()
     auto origin_groupIdx = int64_t(m_groupIdx);
     m_groupIdx = m_idx % m_zoneSize;
     m_FaultTolerance = (m_zoneSize - 1) / 3;
+    m_groupSwitchCycle = m_FaultTolerance + 1;
     m_groupFaultTolerance = (m_zoneNum - 1) / 3;
 
     // update the node list of other groups that can receive the network packet of this node if the
@@ -418,11 +423,10 @@ bool GroupPBFTEngine::handleSuperViewChangeReq(
     {
         return false;
     }
-    m_groupPBFTReqCache->addSuperViewChangeReq(superViewChangeReq, zoneId);
-    checkSuperViewChangeAndChangeView();
     // this node is not located in the consensus zone and receive the superViewChange request from
     // consensus zone
-    if (!locatedInConsensusZone() && locatedInConsensusZone(superViewChangeReq->height, zoneId))
+    if (!superViewChangeReq->isGlobal() && !locatedInConsensusZone() &&
+        locatedInConsensusZone(superViewChangeReq->height, zoneId))
     {
         GPBFTENGINE_LOG(DEBUG)
             << LOG_DESC(
@@ -434,33 +438,59 @@ bool GroupPBFTEngine::handleSuperViewChangeReq(
             << LOG_KV("curZone", m_zoneId) << LOG_KV("idx", nodeIdx());
         // broadcast viewchange request to other nodes
         m_toView = superViewChangeReq->view;
+        // remove the invalid viewchangeReq when receive superViewChangeReq from the consensus zone
+        m_groupPBFTReqCache->removeInvalidViewChange(m_toView, m_highestBlock);
         broadcastViewChange(superViewChangeReq);
     }
-    GPBFTENGINE_LOG(INFO) << LOG_DESC("handleSuperViewChangeReq succ") << LOG_KV("INFO", oss.str());
+    m_groupPBFTReqCache->addSuperViewChangeReq(superViewChangeReq, zoneId);
+    checkSuperViewChangeAndChangeView();
+
+    GPBFTENGINE_LOG(INFO) << LOG_DESC("handleSuperViewChangeReq succ") << LOG_KV("INFO", oss.str())
+                          << LOG_KV("global", superViewChangeReq->isGlobal());
     return true;
+}
+
+
+bool GroupPBFTEngine::broadcastGlobalViewChangeReq()
+{
+    std::shared_ptr<ViewChangeReq> req = m_pbftMsgFactory->buildViewChangeReq(
+        m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
+    std::shared_ptr<GroupViewChangeReq> groupViewChangeReq =
+        std::dynamic_pointer_cast<GroupViewChangeReq>(req);
+    groupViewChangeReq->setType(1);
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcastGlobalViewChangeReq ") << LOG_KV("v", m_view)
+                          << LOG_KV("toV", m_toView) << LOG_KV("curNum", m_highestBlock.number())
+                          << LOG_KV("hash", req->block_hash.abridged())
+                          << LOG_KV("nodeIdx", nodeIdx())
+                          << LOG_KV("myNode", m_keyPair.pub().abridged());
+    bytes view_change_data;
+    req->encode(view_change_data);
+    return broadcastMsg(
+        PBFTPacketType::ViewChangeReqPacket, req->uniqueKey(), ref(view_change_data));
 }
 
 
 bool GroupPBFTEngine::broadcastViewChange(std::shared_ptr<SuperViewChangeReq> superViewChangeReq)
 {
-    ViewChangeReq req(m_keyPair, m_highestBlock.number(), superViewChangeReq->view, nodeIdx(),
-        m_highestBlock.hash());
+    std::shared_ptr<ViewChangeReq> req = m_pbftMsgFactory->buildViewChangeReq(m_keyPair,
+        m_highestBlock.number(), superViewChangeReq->view, nodeIdx(), m_highestBlock.hash());
+
     GPBFTENGINE_LOG(DEBUG)
         << LOG_DESC(
                "broadcast viewchange request when receive viewchangeRequest from consensusZone")
-        << LOG_KV("curView", m_view) << LOG_KV("toView", req.view) << LOG_KV("genIdx", req.idx)
+        << LOG_KV("curView", m_view) << LOG_KV("toView", req->view) << LOG_KV("genIdx", req->idx)
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("zoneIdx", m_zoneId);
     bytes viewChangeData;
-    req.encode(viewChangeData);
-    return broadcastMsg(PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(viewChangeData));
+    req->encode(viewChangeData);
+    return broadcastMsg(PBFTPacketType::ViewChangeReqPacket, req->uniqueKey(), ref(viewChangeData));
 }
 
 // broadcast superviewchange Req
-bool GroupPBFTEngine::broadcastSuperViewChangeReq()
+bool GroupPBFTEngine::broadcastSuperViewChangeReq(uint8_t type)
 {
     // generate superViewChangeReq
-    std::shared_ptr<SuperViewChangeReq> req = std::make_shared<SuperViewChangeReq>(
-        m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash());
+    std::shared_ptr<SuperViewChangeReq> req = m_groupPBFTMsgFactory->buildSuperViewChangeReq(
+        m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash(), type);
     // cache superViewChangeReq
     m_groupPBFTReqCache->addSuperViewChangeReq(req, m_zoneId);
     GPBFTENGINE_LOG(INFO) << LOG_DESC("broadcast SuperViewChangeReq")
@@ -479,7 +509,27 @@ void GroupPBFTEngine::checkAndChangeView()
     size_t count = m_groupPBFTReqCache->getViewChangeSize(m_toView);
     if (count >= (size_t)(minValidNodes() - 1))
     {
-        broadcastSuperViewChangeReq();
+        size_t globalViewChangeSize = m_groupPBFTReqCache->getGlobalViewChangeSize(m_toView);
+        m_groupPBFTReqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+        if (globalViewChangeSize > (size_t)(m_FaultTolerance))
+        {
+            GPBFTENGINE_LOG(INFO) << LOG_DESC(
+                                         "checkAndChangeView: broadcast global super viewchange")
+                                  << LOG_KV("toView", m_toView)
+                                  << LOG_KV("height", m_highestBlock.number())
+                                  << LOG_KV("globalViewChangeSize", globalViewChangeSize)
+                                  << LOG_KV("zoneId", m_zoneId) << LOG_KV("idx", nodeIdx());
+            broadcastSuperViewChangeReq(1);
+        }
+        else
+        {
+            GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: broadcast super viewchange")
+                                  << LOG_KV("toView", m_toView)
+                                  << LOG_KV("height", m_highestBlock.number())
+                                  << LOG_KV("globalViewChangeSize", globalViewChangeSize)
+                                  << LOG_KV("zoneId", m_zoneId) << LOG_KV("idx", nodeIdx());
+            broadcastSuperViewChangeReq(0);
+        }
     }
     checkSuperViewChangeAndChangeView();
 }
@@ -490,31 +540,25 @@ void GroupPBFTEngine::checkSuperViewChangeAndChangeView()
     {
         return;
     }
-#if 0
-    if (m_lastTimeout && m_groupTimeoutCount > 0)
-    {
-        m_groupTimeoutCount--;
-    }
-    // if trigger continuous number of {m_FaultTolerance + 1} timeout, switch group
-    if (m_groupTimeoutCount == 0)
+    auto globalSuperViewChangeSize = m_groupPBFTReqCache->getGlobalSuperViewChangeSize(m_toView);
+
+    if (globalSuperViewChangeSize > (size_t)(m_groupFaultTolerance))
     {
         m_globalView = m_toView;
-        m_groupTimeoutCount = m_FaultTolerance + 1;
-        GPBFTENGINE_LOG(INFO) << LOG_DESC("reset globalView")
-                              << LOG_KV("continuous timeoutCount", m_groupTimeoutCount)
-                              << LOG_KV("curGlobalView", m_globalView) << LOG_KV("idx", m_idx)
-                              << LOG_KV("zoneId", m_zoneId);
+        updateCurrentHash(m_highestBlock.hash());
+        GPBFTENGINE_LOG(INFO)
+            << LOG_DESC("update globalView for collect enough global superViewChangeReq")
+            << LOG_KV("globalView", m_globalView)
+            << LOG_KV("globalSuperViewChangeSize", globalSuperViewChangeSize)
+            << LOG_KV("groupFaultTolerance", m_groupFaultTolerance)
+            << LOG_KV("currentBlockHash", m_currentBlockHash) << LOG_KV("zoneId", m_zoneId);
     }
-    m_lastTimeout = true;
-#endif
-
+    changeView();
     GPBFTENGINE_LOG(INFO) << LOG_DESC("changeView for collect enough SuperViewChangeReq")
                           << LOG_KV("currentView", m_view) << LOG_KV("toView", m_toView)
                           << LOG_KV("curConsZone", getConsensusZone(m_highestBlock.number()))
                           << LOG_KV("curLeader", getLeader().second) << LOG_KV("idx", m_idx)
                           << LOG_KV("zoneId", m_zoneId);
-
-    changeView();
 }
 
 CheckResult GroupPBFTEngine::isValidSuperViewChangeReq(
@@ -583,7 +627,10 @@ void GroupPBFTEngine::updateConsensusStatus()
 {
     updateCurrentHash(m_highestBlock.hash());
     PBFTEngine::updateBasicStatus();
-    m_lastTimeout = false;
+    GPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusStatus:")
+                           << LOG_KV("leader", getLeader().second)
+                           << LOG_KV("consZone", getConsensusZone(m_highestBlock.number()))
+                           << LOG_KV("zone", m_zoneId) << LOG_KV("idx", nodeIdx());
 }
 
 bool GroupPBFTEngine::reportForEmptyBlock()
@@ -601,6 +648,7 @@ bool GroupPBFTEngine::reportForEmptyBlock()
         return false;
     }
     updateCurrentHash(m_groupPBFTReqCache->prepareCache()->block_hash);
+    m_groupSwitchCycle = m_FaultTolerance + 1;
     PBFTEngine::updateBasicStatus();
     // reset m_lastTimeout
     m_lastTimeout = false;
@@ -639,12 +687,54 @@ void GroupPBFTEngine::checkSuperReqAndCommitBlock()
 
 void GroupPBFTEngine::checkTimeout()
 {
-    // non-consensus group no need to checkTimeout and changeView
-    if (!locatedInConsensusZone())
+    bool flag = false;
     {
-        return;
+        Guard l(m_mutex);
+        if (!m_timeManager.isTimeout())
+        {
+            return;
+        }
+        auto orgChangeCycle = m_timeManager.m_changeCycle;
+
+        // timeout caused by non-fastviewchange
+        if (m_timeManager.m_lastConsensusTime != 0)
+        {
+            m_timeManager.updateChangeCycle();
+        }
+        // timeout caused by fast view change
+        m_toView += 1;
+        flag = true;
+        m_leaderFailed = true;
+        m_groupPBFTReqCache->removeInvalidViewChange(m_toView, m_highestBlock);
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        m_timeManager.m_lastConsensusTime = utcTime();
+        // trigger global view change
+        if (m_timeManager.m_changeCycle > 0 &&
+            m_timeManager.m_changeCycle % (m_groupSwitchCycle) == 0 &&
+            orgChangeCycle != m_timeManager.m_changeCycle)
+        {
+            if (m_groupSwitchCycle > 2)
+            {
+                m_groupSwitchCycle = m_groupSwitchCycle / 2;
+            }
+            else
+            {
+                m_groupSwitchCycle = 1;
+            }
+            broadcastGlobalViewChangeReq();
+            checkAndChangeView();
+            return;
+        }
+        else if (locatedInConsensusZone() || m_fastViewChange)
+        {
+            broadcastViewChangeReq();
+        }
+        checkAndChangeView();
     }
-    PBFTEngine::checkTimeout();
+    if (flag && m_onViewChange)
+    {
+        m_onViewChange();
+    }
 }
 
 std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg)
@@ -672,7 +762,7 @@ std::shared_ptr<PBFTMsg> GroupPBFTEngine::handleMsg(std::string& key, PBFTMsgPac
     case GroupPBFTPacketType::SuperViewChangeReqPacket:
     {
         std::shared_ptr<SuperViewChangeReq> superViewChangeReq =
-            std::make_shared<SuperViewChangeReq>();
+            m_groupPBFTMsgFactory->buildSuperViewChangeReq();
         succ = handleSuperViewChangeReq(superViewChangeReq, pbftMsg);
         key = superViewChangeReq->uniqueKey();
         pbftPacket = superViewChangeReq;
@@ -716,16 +806,5 @@ bool GroupPBFTEngine::checkBlock(Block const& block)
     }
     return true;
 }
-
-// only for consensus zone
-void GroupPBFTEngine::changeViewForFastViewChange()
-{
-    if (!locatedInConsensusZone())
-    {
-        return;
-    }
-    PBFTEngine::changeViewForFastViewChange();
-}
-
 }  // namespace consensus
 }  // namespace dev

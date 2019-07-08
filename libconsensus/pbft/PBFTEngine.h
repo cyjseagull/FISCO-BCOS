@@ -24,6 +24,7 @@
 #pragma once
 #include "Common.h"
 #include "PBFTBroadcastCache.h"
+#include "PBFTMsgFactory.h"
 #include "PBFTReqCache.h"
 #include "PBFTReqFactory.h"
 #include "TimeManager.h"
@@ -85,6 +86,11 @@ public:
         m_pbftReqFactory = pbftReqFactory;
     }
 
+    void setPBFTMsgFactory(std::shared_ptr<PBFTMsgFactoryInterface> pbftMsgFactory)
+    {
+        m_pbftMsgFactory = pbftMsgFactory;
+    }
+
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
 
     std::string const& getBaseDir() { return m_baseDir; }
@@ -112,6 +118,7 @@ public:
     }
 
     void start() override;
+    virtual void initPBFTCacheObject();
 
     /// reach the minimum block generation time
     virtual bool reachMinBlockGenTime()
@@ -213,6 +220,7 @@ public:
     }
 
     uint64_t sealingTxNumber() const { return m_sealingNumber; }
+    virtual bool shouldReportBlock(dev::eth::Block const& block) const;
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -275,7 +283,7 @@ protected:
 
     bool handleCommitMsg(std::shared_ptr<CommitReq> commitReq, PBFTMsgPacket const& pbftMsg);
     bool handleViewChangeMsg(
-        std::shared_ptr<ViewChangeReq>& viewChangeReq, PBFTMsgPacket const& pbftMsg);
+        std::shared_ptr<ViewChangeReq> viewChangeReq, PBFTMsgPacket const& pbftMsg);
     void handleMsg(PBFTMsgPacket const& pbftMsg);
     virtual std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg);
 
@@ -578,7 +586,8 @@ protected:
                 << LOG_KV("height", req->height)
                 << LOG_KV("cacheHeight", m_reqCache->committedPrepareCache()->height)
                 << LOG_KV("hash", req->block_hash.abridged())
-                << LOG_KV("cacheHash", m_reqCache->committedPrepareCache()->block_hash.abridged());
+                << LOG_KV("cacheHash", m_reqCache->committedPrepareCache()->block_hash.abridged())
+                << LOG_KV("currentLeader", getLeader().second) << LOG_KV("idx", nodeIdx());
             return false;
         }
         return true;
@@ -640,6 +649,7 @@ protected:
     std::shared_ptr<PBFTReqCache> m_reqCache = nullptr;
 
     std::shared_ptr<PBFTReqFactory> m_pbftReqFactory = nullptr;
+    std::shared_ptr<PBFTMsgFactoryInterface> m_pbftMsgFactory = nullptr;
 
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;

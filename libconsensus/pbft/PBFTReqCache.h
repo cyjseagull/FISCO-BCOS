@@ -118,7 +118,7 @@ public:
             m_rawPrepareCache = req;
         }
         PBFTReqCache_LOG(DEBUG) << LOG_DESC("addRawPrepare") << LOG_KV("height", req->height)
-                                << LOG_KV("reqIdx", req->idx)
+                                << LOG_KV("reqIdx", req->idx) << LOG_KV("view", req->view)
                                 << LOG_KV("hash", req->block_hash.abridged());
         {
             WriteGuard l(x_prepareCache);
@@ -131,6 +131,11 @@ public:
     /// specified prepare-request from the sign-cache and commit-cache
     inline void addPrepareReq(std::shared_ptr<PrepareReq> req)
     {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addPrepareReq") << LOG_KV("height", req->height)
+                                << LOG_KV("GenIdx", req->idx)
+                                << LOG_KV("txNum", req->pBlock->getTransactionSize())
+                                << LOG_KV("view", req->view)
+                                << LOG_KV("hash", req->block_hash.abridged());
         {
             WriteGuard l(x_prepareCache);
             m_prepareCache = req;
@@ -141,18 +146,29 @@ public:
     /// add specified signReq to the sign-cache
     inline void addSignReq(std::shared_ptr<SignReq> req)
     {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addSignReq") << LOG_KV("height", req->height)
+                                << LOG_KV("GenIdx", req->idx) << LOG_KV("view", req->view)
+                                << LOG_KV("hash", req->block_hash.abridged());
         WriteGuard l(x_signCache);
+
         m_signCache[req->block_hash][req->sig.hex()] = req;
     }
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(std::shared_ptr<CommitReq> req)
     {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addCommitReq") << LOG_KV("height", req->height)
+                                << LOG_KV("GenIdx", req->idx) << LOG_KV("view", req->view)
+                                << LOG_KV("hash", req->block_hash.abridged());
         WriteGuard l(x_commitCache);
         m_commitCache[req->block_hash][req->sig.hex()] = req;
     }
     /// add specified viewchange cache to the viewchange-cache
     inline void addViewChangeReq(std::shared_ptr<ViewChangeReq> req)
     {
+        PBFTReqCache_LOG(DEBUG) << LOG_DESC("addViewChangeReq") << LOG_KV("height", req->height)
+                                << LOG_KV("GenIdx", req->idx) << LOG_KV("view", req->view)
+                                << LOG_KV("hash", req->block_hash.abridged())
+                                << LOG_KV("global", req->isGlobal());
         WriteGuard l(x_recvViewChangeReq);
         auto it = m_recvViewChangeReq.find(req->view);
         if (it != m_recvViewChangeReq.end())
@@ -198,7 +214,8 @@ public:
         {
             PBFTReqCache_LOG(INFO)
                 << LOG_DESC("addFuturePrepareCache") << LOG_KV("height", req->height)
-                << LOG_KV("reqIdx", req->idx) << LOG_KV("hash", req->block_hash.abridged());
+                << LOG_KV("view", req->view) << LOG_KV("reqIdx", req->idx)
+                << LOG_KV("hash", req->block_hash.abridged());
             m_futurePrepareCache[req->height] = req;
         }
     }
@@ -252,18 +269,26 @@ public:
     void delCache(h256 const& hash);
     inline void collectGarbage(dev::eth::BlockHeader const& highestBlockHeader)
     {
-        removeInvalidEntryFromCache(highestBlockHeader, m_signCache, x_signCache);
-        removeInvalidEntryFromCache(highestBlockHeader, m_commitCache, x_commitCache);
+        {
+            WriteGuard l(x_signCache);
+            removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
+        }
+        {
+            WriteGuard l(x_commitCache);
+            removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+        }
         /// remove invalid future block cache from cache
         removeInvalidFutureCache(highestBlockHeader);
         /// delete invalid viewchange from cache
         delInvalidViewChange(highestBlockHeader);
     }
     /// remove invalid view-change requests according to view and the current block header
-    void removeInvalidViewChange(VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
-    inline void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
+    virtual void removeInvalidViewChange(
+        VIEWTYPE const& view, dev::eth::BlockHeader const& highestBlock);
+    virtual void delInvalidViewChange(dev::eth::BlockHeader const& curHeader)
     {
-        removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq, x_recvViewChangeReq);
+        WriteGuard l(x_recvViewChangeReq);
+        removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
     }
     inline void clearAllExceptCommitCache()
     {
@@ -335,11 +360,10 @@ public:
 
 protected:
     /// remove invalid requests cached in cache according to current block
-    template <typename T, typename U, typename S, typename L>
+    template <typename T, typename U, typename S>
     void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
-        std::unordered_map<T, std::unordered_map<U, S>>& cache, L& mutex)
+        std::unordered_map<T, std::unordered_map<U, S>>& cache)
     {
-        WriteGuard l(mutex);
         for (auto it = cache.begin(); it != cache.end();)
         {
             for (auto cache_entry = it->second.begin(); cache_entry != it->second.end();)

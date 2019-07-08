@@ -43,13 +43,18 @@ const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
 
 void PBFTEngine::start()
 {
+    initPBFTCacheObject();
+    ConsensusEngineBase::start();
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
+}
+
+void PBFTEngine::initPBFTCacheObject()
+{
     assert(m_pbftReqFactory);
     m_broadCastCache = std::make_shared<PBFTBroadcastCache>();
     m_broadCastCache->setPBFTReqFactory(m_pbftReqFactory);
     m_reqCache = m_pbftReqFactory->buildPBFTReqCache();
     initPBFTEnv(3 * getEmptyBlockGenTime());
-    ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -360,8 +365,8 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
     commit_req->encode(commit_req_data);
     bool succ = broadcastMsg(
         PBFTPacketType::CommitReqPacket, commit_req->uniqueKey(), ref(commit_req_data));
-    if (succ)
-        m_reqCache->addCommitReq(commit_req);
+
+    m_reqCache->addCommitReq(commit_req);
     return succ;
 }
 
@@ -369,28 +374,29 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 /// send view change message to the given node
 void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 {
-    ViewChangeReq req(
+    std::shared_ptr<ViewChangeReq> req = m_pbftMsgFactory->buildViewChangeReq(
         m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
+
     PBFTENGINE_LOG(INFO) << LOG_DESC("sendViewChangeMsg: send viewchange to started node")
                          << LOG_KV("v", m_view) << LOG_KV("toV", m_toView)
                          << LOG_KV("curNum", m_highestBlock.number())
                          << LOG_KV("peerNode", nodeId.abridged())
-                         << LOG_KV("hash", req.block_hash.abridged())
+                         << LOG_KV("hash", req->block_hash.abridged())
                          << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     bytes view_change_data;
-    req.encode(view_change_data);
-    sendMsg(nodeId, PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+    req->encode(view_change_data);
+    sendMsg(nodeId, PBFTPacketType::ViewChangeReqPacket, req->uniqueKey(), ref(view_change_data));
 }
 
 bool PBFTEngine::broadcastViewChangeReq()
 {
-    ViewChangeReq req(
+    std::shared_ptr<ViewChangeReq> req = m_pbftMsgFactory->buildViewChangeReq(
         m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcastViewChangeReq ") << LOG_KV("v", m_view)
                           << LOG_KV("toV", m_toView) << LOG_KV("curNum", m_highestBlock.number())
-                          << LOG_KV("hash", req.block_hash.abridged())
+                          << LOG_KV("hash", req->block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
     /// view change not caused by fast view change
@@ -399,15 +405,15 @@ bool PBFTEngine::broadcastViewChangeReq()
         PBFTENGINE_LOG(WARNING) << LOG_DESC("ViewChangeWarning: not caused by omit empty block ")
                                 << LOG_KV("v", m_view) << LOG_KV("toV", m_toView)
                                 << LOG_KV("curNum", m_highestBlock.number())
-                                << LOG_KV("hash", req.block_hash.abridged())
+                                << LOG_KV("hash", req->block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
     }
 
     bytes view_change_data;
-    req.encode(view_change_data);
+    req->encode(view_change_data);
     return broadcastMsg(
-        PBFTPacketType::ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+        PBFTPacketType::ViewChangeReqPacket, req->uniqueKey(), ref(view_change_data));
 }
 
 /// set default ttl to 1 to in case of forward-broadcast
@@ -1078,7 +1084,7 @@ void PBFTEngine::updateBasicStatus()
 /// 5. clear all caches related to prepareReq and signReq
 void PBFTEngine::reportBlockWithoutLock(Block const& block)
 {
-    if (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number())
+    if (shouldReportBlock(block))
     {
         if (m_onCommitBlock)
         {
@@ -1103,6 +1109,11 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("nodeIdx", nodeIdx());
     }
+}
+
+bool PBFTEngine::shouldReportBlock(Block const& block) const
+{
+    return (m_blockChain->number() == 0 || m_highestBlock.number() < block.blockHeader().number());
 }
 
 /**
@@ -1256,7 +1267,7 @@ CheckResult PBFTEngine::isValidCommitReq(
 }
 
 bool PBFTEngine::handleViewChangeMsg(
-    std::shared_ptr<ViewChangeReq>& viewChange_req, PBFTMsgPacket const& pbftMsg)
+    std::shared_ptr<ViewChangeReq> viewChange_req, PBFTMsgPacket const& pbftMsg)
 {
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
@@ -1398,7 +1409,8 @@ void PBFTEngine::changeView()
     PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                          << LOG_KV("org_view", m_view) << LOG_KV("org_changeCycle", orgChangeCycle)
                          << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
-                         << LOG_KV("to_view", m_toView);
+                         << LOG_KV("to_view", m_toView)
+                         << LOG_KV("currentLeader", getLeader().second) << LOG_KV("idx", nodeIdx());
 
 
     m_leaderFailed = false;
@@ -1513,7 +1525,7 @@ std::shared_ptr<PBFTMsg> PBFTEngine::handleMsg(std::string& key, PBFTMsgPacket c
     }
     case PBFTPacketType::ViewChangeReqPacket:
     {
-        std::shared_ptr<ViewChangeReq> req = std::make_shared<ViewChangeReq>();
+        std::shared_ptr<ViewChangeReq> req = m_pbftMsgFactory->buildViewChangeReq();
         succ = handleViewChangeMsg(req, pbftMsg);
         key = req->uniqueKey();
         pbft_packet = req;
