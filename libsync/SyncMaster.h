@@ -110,6 +110,12 @@ public:
         fp_isConsensusOk = _handler;
     };
 
+    void registerNodeIdFilterHandler(
+        std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
+    {
+        fp_broadCastNodesFilter = _handler;
+    }
+
     void noteNewTransactions()
     {
         m_newTransactions = true;
@@ -192,6 +198,7 @@ private:
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+    std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_broadCastNodesFilter = nullptr;
 
 public:
     void maintainTransactions();

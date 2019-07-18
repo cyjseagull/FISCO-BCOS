@@ -115,6 +115,7 @@ public:
     void deletePeer(NodeID const& _id);
 
     NodeIDs peers();
+    std::set<NodeID> peersSet();
 
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
@@ -125,6 +126,9 @@ public:
     /// Select some peers at _percent when _allow(peer)
     NodeIDs randomSelection(
         unsigned _percent, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
+
+    NodeIDs selectTargetToReceiveTrans(
+        NodeIDs const& nodes, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow);
 
     /// Select some peers at _selectSize when _allow(peer)
     NodeIDs randomSelectionSize(

@@ -244,18 +244,22 @@ void SyncMaster::maintainTransactions()
 
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
+
+    NodeIDs targetNodes = fp_broadCastNodesFilter(m_syncStatus->peersSet());
+
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (size_t i = 0; i < ts.size(); ++i)
     {
         auto const& t = ts[i];
         NodeIDs peers;
-        unsigned _percent = m_txPool->isTransactionKnownBySomeone(t.sha3()) ? 25 : 100;
+        peers = m_syncStatus->selectTargetToReceiveTrans(
+            targetNodes, [&](std::shared_ptr<SyncPeerStatus> _p) {
+                bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
+                bool isSealer = _p->isSealer;
+                return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
+            });
 
-        peers = m_syncStatus->randomSelection(_percent, [&](std::shared_ptr<SyncPeerStatus> _p) {
-            bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
-            bool isSealer = _p->isSealer;
-            return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
-        });
+
         UpgradeGuard ul(l);
         m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
         if (0 == peers.size())

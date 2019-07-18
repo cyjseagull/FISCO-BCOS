@@ -23,6 +23,8 @@
  */
 #include "GroupPBFTEngine.h"
 using namespace dev::eth;
+using namespace dev::network;
+using namespace dev::sync;
 
 namespace dev
 {

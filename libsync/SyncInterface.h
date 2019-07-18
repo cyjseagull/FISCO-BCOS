@@ -60,6 +60,9 @@ public:
     // verify handler to check downloading block
     virtual void registerConsensusVerifyHandler(
         std::function<bool(dev::eth::Block const&)> _handler) = 0;
+    virtual void registerNodeIdFilterHandler(
+        std::function<dev::p2p::NodeIDs(std::set<dev::network::NodeID> const&)>)
+    {}
 };
 
 }  // namespace sync

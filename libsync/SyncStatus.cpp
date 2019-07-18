@@ -79,6 +79,15 @@ NodeIDs SyncMasterStatus::peers()
     return nodeIds;
 }
 
+std::set<NodeID> SyncMasterStatus::peersSet()
+{
+    std::set<NodeID> nodeIdSet;
+    ReadGuard l(x_peerStatus);
+    for (auto& peer : m_peersStatus)
+        nodeIdSet.insert(peer.first);
+    return nodeIdSet;
+}
+
 std::shared_ptr<SyncPeerStatus> SyncMasterStatus::peerStatus(NodeID const& _id)
 {
     ReadGuard l(x_peerStatus);
@@ -131,6 +140,20 @@ void SyncMasterStatus::foreachPeerRandom(
         if (!_f(peer->second))
             break;
     }
+}
+
+NodeIDs SyncMasterStatus::selectTargetToReceiveTrans(
+    NodeIDs const& nodes, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _allow)
+{
+    NodeIDs chosen;
+    for (auto const& node : nodes)
+    {
+        if (_allow(m_peersStatus[node]))
+        {
+            chosen.push_back(node);
+        }
+    }
+    return chosen;
 }
 
 // TODO: return reference
