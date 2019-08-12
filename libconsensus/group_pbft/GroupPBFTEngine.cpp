@@ -208,7 +208,23 @@ ssize_t GroupPBFTEngine::getGroupIndexBySealer(dev::network::NodeID const& nodeI
 bool GroupPBFTEngine::broadCastMsgAmongGroups(const int& packetType, std::string const& key,
     bytesConstRef data, unsigned const& ttl, std::unordered_set<dev::network::NodeID> const& filter)
 {
-    return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl, m_groupBroadcastFilter);
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    std::set<dev::network::NodeID> peers;
+    for (auto const& session : sessions)
+    {
+        peers.insert(session.nodeID());
+    }
+    auto selectedNodes = NodeIdFilterHandler(peers);
+    return PBFTEngine::broadcastMsg(
+        packetType, key, data, filter, ttl, [&](dev::network::NodeID const& nodeId) {
+            // should broadcast to the node
+            if (selectedNodes.count(nodeId))
+            {
+                return 1;
+            }
+            // shouldn't broadcast to the node
+            return -1;
+        });
 }
 
 ssize_t GroupPBFTEngine::filterGroupNodeByNodeID(dev::network::NodeID const& nodeId)
