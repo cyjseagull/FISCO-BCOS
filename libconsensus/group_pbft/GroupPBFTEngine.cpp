@@ -205,24 +205,10 @@ ssize_t GroupPBFTEngine::getGroupIndexBySealer(dev::network::NodeID const& nodeI
 }
 
 
-bool GroupPBFTEngine::broadCastMsgAmongGroups(const int& packetType, std::string const& key,
+bool GroupPBFTEngine::broadCastMsgAmongGroups(const int packetType, std::string const& key,
     bytesConstRef data, unsigned const& ttl, std::unordered_set<dev::network::NodeID> const& filter)
 {
-    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    std::set<dev::network::NodeID> peers;
-    for (auto const& session : sessions)
-    {
-        peers.insert(session.nodeID());
-    }
-    auto selectedNodes = NodeIdFilterHandler(peers);
-    for (auto const& nodeId : selectedNodes)
-    {
-        broadcastMark(nodeId, packetType, key);
-    }
-    /// send messages according to node id
-    m_service->asyncMulticastMessageByNodeIDList(
-        selectedNodes, transDataToMessage(data, packetType, ttl));
-    return true;
+    return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl, m_groupBroadcastFilter);
 }
 
 ssize_t GroupPBFTEngine::filterGroupNodeByNodeID(dev::network::NodeID const& nodeId)
@@ -254,19 +240,30 @@ bool GroupPBFTEngine::locatedInConsensusZone() const
 
 void GroupPBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq)
 {
-    // nodes of the consensus zone broadcast encoded Prepare packet to nodes located in other groups
-    if (locatedInConsensusZone())
-    {
         bytes prepare_data;
+        int packetType = GroupPBFTPacketType::PrepareReqPacket;
         prepareReq->encode(prepare_data);
         GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
                                << LOG_KV("height", prepareReq->height)
                                << LOG_KV("hash", prepareReq->block_hash.abridged())
                                << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
                                << LOG_KV("idx", m_idx);
-        broadCastMsgAmongGroups(
-            GroupPBFTPacketType::PrepareReqPacket, prepareReq->uniqueKey(), ref(prepare_data));
-    }
+
+        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+        std::set<dev::network::NodeID> peers;
+        for (auto const& session : sessions)
+        {
+            peers.insert(session.nodeID());
+        }
+        auto selectedNodes = NodeIdFilterHandler(peers);
+        for (auto const& nodeId : selectedNodes)
+        {
+            broadcastMark(nodeId, packetType, prepareReq->uniqueKey());
+        }
+        /// send messages according to node id
+        m_service->asyncMulticastMessageByNodeIDList(
+            selectedNodes, transDataToMessage(ref(prepare_data), packetType, 0));
+
 }
 
 

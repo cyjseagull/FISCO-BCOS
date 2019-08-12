@@ -142,7 +142,7 @@ protected:
     virtual void broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq);
 
     // broadcast message among groups
-    bool broadCastMsgAmongGroups(const int& packetType, std::string const& key, bytesConstRef data,
+    bool broadCastMsgAmongGroups(const int packetType, std::string const& key, bytesConstRef data,
         unsigned const& ttl = 0,
         std::unordered_set<dev::network::NodeID> const& filter =
             std::unordered_set<dev::network::NodeID>());
