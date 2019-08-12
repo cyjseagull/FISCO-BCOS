@@ -215,16 +215,14 @@ bool GroupPBFTEngine::broadCastMsgAmongGroups(const int& packetType, std::string
         peers.insert(session.nodeID());
     }
     auto selectedNodes = NodeIdFilterHandler(peers);
-    return PBFTEngine::broadcastMsg(
-        packetType, key, data, filter, ttl, [&](dev::network::NodeID const& nodeId) {
-            // should broadcast to the node
-            if (selectedNodes.count(nodeId))
-            {
-                return 1;
-            }
-            // shouldn't broadcast to the node
-            return -1;
-        });
+    for (auto const& nodeId : selectedNodes)
+    {
+        broadcastMark(nodeId, packetType, key);
+    }
+    /// send messages according to node id
+    m_service->asyncMulticastMessageByNodeIDList(
+        selectedNodes, transDataToMessage(data, packetType, ttl));
+    return true;
 }
 
 ssize_t GroupPBFTEngine::filterGroupNodeByNodeID(dev::network::NodeID const& nodeId)
