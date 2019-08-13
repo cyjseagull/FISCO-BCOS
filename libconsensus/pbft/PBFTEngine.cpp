@@ -339,6 +339,7 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
     bool ret = triggerViewChangeForEmptyBlock(prepare_req);
     if (ret)
     {
+        broadcastPrepareToOtherGroups(prepare_req);
         return true;
     }
     handlePrepareMsg(prepare_req);
