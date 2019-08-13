@@ -544,6 +544,8 @@ CheckResult PBFTEngine::isValidPrepare(std::shared_ptr<PrepareReq> req, std::ost
     }
     if (!isValidLeader(req))
     {
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: invalid leader")
+                              << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
     if (!isHashSavedAfterCommit(req))
@@ -799,6 +801,10 @@ bool PBFTEngine::handlePrepareMsg(
 {
     bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
     if (!valid)
+    {
+        return false;
+    }
+    if (!filterSource(prepare_req, pbftMsg))
     {
         return false;
     }
@@ -1132,6 +1138,10 @@ bool PBFTEngine::handleSignMsg(std::shared_ptr<SignReq> sign_req, PBFTMsgPacket 
     {
         return false;
     }
+    if (!filterSource(sign_req, pbftMsg))
+    {
+        return false;
+    }
     std::ostringstream oss;
     oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req->height)
         << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req->idx)
@@ -1210,6 +1220,10 @@ bool PBFTEngine::handleCommitMsg(
     {
         return false;
     }
+    if (!filterSource(commit_req, pbftMsg))
+    {
+        return false;
+    }
     std::ostringstream oss;
     oss << LOG_DESC("handleCommitMsg") << LOG_KV("reqNum", commit_req->height)
         << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req->idx)
@@ -1271,6 +1285,10 @@ bool PBFTEngine::handleViewChangeMsg(
 {
     bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
     if (!valid)
+    {
+        return false;
+    }
+    if (!filterSource(viewChange_req, pbftMsg))
     {
         return false;
     }
