@@ -1557,6 +1557,10 @@ void PBFTEngine::handleMsg(PBFTMsgPacket const& pbftMsg)
     {
         return;
     }
+    if (!filterSource(pbft_msg, pbftMsg))
+    {
+        return;
+    }
     if (pbftMsg.ttl <= 1)
     {
         return;

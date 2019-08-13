@@ -220,6 +220,19 @@ public:
     uint64_t sealingTxNumber() const { return m_sealingNumber; }
     virtual bool shouldReportBlock(dev::eth::Block const& block) const;
 
+    template <typename T, typename S>
+    bool filterSource(std::shared_ptr<T> req, S const& pbftMsg)
+    {
+        NodeID genNodeId;
+        broadcastMark(pbftMsg.node_id, pbftMsg.packet_id, req->uniqueKey());
+        if (!getNodeIDByIndex(genNodeId, req->idx))
+        {
+            return false;
+        }
+        broadcastMark(genNodeId, pbftMsg.packet_id, req->uniqueKey());
+        return true;
+    }
+
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;
