@@ -303,12 +303,8 @@ protected:
 
     CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss) override
     {
-        CheckResult ret = PBFTEngine::isValidPrepare(req, oss);
-        if (ret != CheckResult::INVALID)
-        {
-            broadcastPrepareToOtherGroups(req);
-        }
-        return ret;
+        broadcastPrepareToOtherGroups(req);
+        return PBFTEngine::isValidPrepare(req, oss);
     }
 
     void checkTimeout() override;
@@ -423,7 +419,6 @@ private:
     {
         return (nodeIdx / m_configuredGroupSize);
     }
-
 
 protected:
     // the zone that include this node

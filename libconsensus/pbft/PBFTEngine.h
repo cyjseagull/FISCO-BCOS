@@ -627,19 +627,6 @@ protected:
         m_viewMap[idx] = view;
     }
 
-    template <typename T, typename S>
-    bool filterSource(std::shared_ptr<T> req, S const& pbftMsg)
-    {
-        NodeID genNodeId;
-        broadcastMark(pbftMsg.node_id, pbftMsg.packet_id, req->uniqueKey());
-        if (!getNodeIDByIndex(genNodeId, req->idx))
-        {
-            return false;
-        }
-        broadcastMark(genNodeId, pbftMsg.packet_id, req->uniqueKey());
-        return true;
-    }
-
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
