@@ -763,6 +763,7 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     std::atomic<uint64_t> m_sealingNumber = {0};
+    ssize_t m_broadcastNodes = 3;
 };
 }  // namespace consensus
 }  // namespace dev

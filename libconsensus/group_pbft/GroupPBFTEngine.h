@@ -377,7 +377,6 @@ protected:
     // pointers
     std::shared_ptr<GroupPBFTReqCache> m_groupPBFTReqCache = nullptr;
     std::shared_ptr<GroupPBFTMsgFactory> m_groupPBFTMsgFactory = nullptr;
-    ssize_t m_broadcastNodes = 3;
 };
 }  // namespace consensus
 }  // namespace dev

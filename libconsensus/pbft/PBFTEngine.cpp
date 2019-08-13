@@ -284,7 +284,7 @@ bool PBFTEngine::triggerViewChangeForEmptyBlock(std::shared_ptr<PrepareReq> prep
 
 void PBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq)
 {
-    int packetType = GroupPBFTPacketType::PrepareReqPacket;
+    int packetType = PBFTPacketType::PrepareReqPacket;
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     std::set<dev::network::NodeID> peers;
     for (auto const& session : sessions)
@@ -309,11 +309,10 @@ void PBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepa
     }
     bytes prepare_data;
     prepareReq->encode(prepare_data);
-    GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
-                           << LOG_KV("height", prepareReq->height)
-                           << LOG_KV("hash", prepareReq->block_hash.abridged())
-                           << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
-                           << LOG_KV("idx", m_idx);
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
+                          << LOG_KV("height", prepareReq->height)
+                          << LOG_KV("hash", prepareReq->block_hash.abridged())
+                          << LOG_KV("idx", m_idx);
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
         targetNodes, transDataToMessage(ref(prepare_data), packetType, 1));
@@ -352,7 +351,7 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
                          << LOG_KV("H", prepare_req->height) << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("myNode", m_keyPair.pub().abridged());
     m_signalled.notify_all();
-    return succ;
+    return true;
 }
 
 /**
