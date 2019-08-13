@@ -276,7 +276,7 @@ void GroupPBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> 
                            << LOG_KV("idx", m_idx);
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
-        targetNodes, transDataToMessage(ref(prepare_data), packetType, 0));
+        targetNodes, transDataToMessage(ref(prepare_data), packetType, 1));
 }
 
 
