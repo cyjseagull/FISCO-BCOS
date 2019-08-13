@@ -76,9 +76,12 @@ public:
 
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
+        m_blockSync->registerNodeIdFilterHandler(boost::bind(
+            &PBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
         m_broadcastFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
     }
 
+    void broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq);
     void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
     {
         m_pbftReqFactory = pbftReqFactory;
@@ -219,19 +222,6 @@ public:
 
     uint64_t sealingTxNumber() const { return m_sealingNumber; }
     virtual bool shouldReportBlock(dev::eth::Block const& block) const;
-
-    template <typename T, typename S>
-    bool filterSource(std::shared_ptr<T> req, S const& pbftMsg)
-    {
-        NodeID genNodeId;
-        broadcastMark(pbftMsg.node_id, pbftMsg.packet_id, req->uniqueKey());
-        if (!getNodeIDByIndex(genNodeId, req->idx))
-        {
-            return false;
-        }
-        broadcastMark(genNodeId, pbftMsg.packet_id, req->uniqueKey());
-        return true;
-    }
 
 protected:
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -638,6 +628,88 @@ protected:
     {
         WriteGuard l(x_viewMap);
         m_viewMap[idx] = view;
+    }
+
+    template <typename T, typename S>
+    bool filterSource(std::shared_ptr<T> req, S const& pbftMsg)
+    {
+        dev::network::NodeID genNodeId;
+        broadcastMark(pbftMsg.node_id, pbftMsg.packet_id, req->uniqueKey());
+        if (!getNodeIDByIndex(genNodeId, req->idx))
+        {
+            return false;
+        }
+        broadcastMark(genNodeId, pbftMsg.packet_id, req->uniqueKey());
+        return true;
+    }
+
+    template <typename T>
+    dev::p2p::NodeIDs NodeIdFilterHandler(T const& peers)
+    {
+        dev::p2p::NodeIDs nodeList;
+        dev::p2p::NodeID selectedNode;
+        // add the child node
+        RecursiveFilterChildNode(nodeList, m_idx, peers);
+        // add the parent node
+        size_t parentIdx = m_idx / m_broadcastNodes;
+        // the parentNode is the node-self
+        if (parentIdx == m_idx)
+        {
+            return nodeList;
+        }
+        // the parentNode exists in the peer list
+        if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+                                  << LOG_KV("chosedParentNode", selectedNode.abridged())
+                                  << LOG_KV("chosedIdx", parentIdx);
+            nodeList.push_back(selectedNode);
+        }
+        // the parentNode doesn't exist in the peer list
+        else
+        {
+            while (parentIdx != 0)
+            {
+                parentIdx /= m_broadcastNodes;
+                if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
+                {
+                    PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+                                          << LOG_KV("chosedParentNode", selectedNode.abridged())
+                                          << LOG_KV("chosedIdx", parentIdx);
+                    nodeList.push_back(selectedNode);
+                    break;
+                }
+            }
+        }
+        return nodeList;
+    }
+
+    template <typename T>
+    void RecursiveFilterChildNode(
+        dev::p2p::NodeIDs& nodeList, ssize_t const& startIndex, T const& peers)
+    {
+        dev::p2p::NodeID selectedNode;
+        for (ssize_t i = 1; i <= m_broadcastNodes; i++)
+        {
+            ssize_t expectedIdx = startIndex * 3 + i;
+            if (expectedIdx >= m_nodeNum)
+            {
+                break;
+            }
+            // the expectedNode existed in the peers
+            if (getNodeIDByIndex(selectedNode, expectedIdx) && peers.count(selectedNode))
+            {
+                PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
+                                      << LOG_KV("chosedNode", selectedNode.abridged())
+                                      << LOG_KV("chosedIdx", expectedIdx);
+                nodeList.push_back(selectedNode);
+            }
+            // selected the child
+            else
+            {
+                RecursiveFilterChildNode(nodeList, expectedIdx, peers);
+            }
+        }
     }
 
 protected:

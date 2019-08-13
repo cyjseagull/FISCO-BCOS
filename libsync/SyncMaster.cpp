@@ -245,7 +245,11 @@ void SyncMaster::maintainTransactions()
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Transaction need to send ")
                     << LOG_KV("txs", txSize) << LOG_KV("totalTxs", pendingSize);
 
-    NodeIDs targetNodes = fp_broadCastNodesFilter(m_syncStatus->peersSet());
+    NodeIDs targetNodes = m_syncStatus->peers();
+    if (fp_broadCastNodesFilter)
+    {
+        targetNodes = fp_broadCastNodesFilter(m_syncStatus->peersSet());
+    }
 
     UpgradableGuard l(m_txPool->xtransactionKnownBy());
     for (size_t i = 0; i < ts.size(); ++i)

@@ -52,8 +52,6 @@ public:
         /// register checkSealerList to blockSync for check SealerList
         m_blockSync->registerConsensusVerifyHandler(
             boost::bind(&GroupPBFTEngine::checkBlock, this, _1));
-        m_blockSync->registerNodeIdFilterHandler(boost::bind(
-            &GroupPBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
     }
 
     void setGroupSize(int64_t const& groupSize)
@@ -139,7 +137,6 @@ protected:
 
     bool reportForEmptyBlock();
 
-    virtual void broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq);
 
     // broadcast message among groups
     bool broadCastMsgAmongGroups(const int packetType, std::string const& key, bytesConstRef data,
@@ -301,11 +298,6 @@ protected:
 
     std::shared_ptr<PBFTMsg> handleMsg(std::string& key, PBFTMsgPacket const& pbftMsg) override;
 
-    CheckResult isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss) override
-    {
-        broadcastPrepareToOtherGroups(req);
-        return PBFTEngine::isValidPrepare(req, oss);
-    }
 
     void checkTimeout() override;
 
@@ -324,76 +316,6 @@ protected:
 
     void initPBFTCacheObject() override;
     virtual bool broadcastGlobalViewChangeReq();
-
-    template <typename T>
-    dev::p2p::NodeIDs NodeIdFilterHandler(T const& peers)
-    {
-        dev::p2p::NodeIDs nodeList;
-        dev::p2p::NodeID selectedNode;
-        // add the child node
-        RecursiveFilterChildNode(nodeList, m_idx, peers);
-        // add the parent node
-        size_t parentIdx = m_idx / m_broadcastNodes;
-        // the parentNode is the node-self
-        if (parentIdx == m_idx)
-        {
-            return nodeList;
-        }
-        // the parentNode exists in the peer list
-        if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
-        {
-            GPBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
-                                   << LOG_KV("chosedParentNode", selectedNode.abridged())
-                                   << LOG_KV("chosedIdx", parentIdx);
-            nodeList.push_back(selectedNode);
-        }
-        // the parentNode doesn't exist in the peer list
-        else
-        {
-            while (parentIdx != 0)
-            {
-                parentIdx /= m_broadcastNodes;
-                if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
-                {
-                    GPBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
-                                           << LOG_KV("chosedParentNode", selectedNode.abridged())
-                                           << LOG_KV("chosedIdx", parentIdx);
-                    nodeList.push_back(selectedNode);
-                    break;
-                }
-            }
-        }
-        return nodeList;
-    }
-
-    template <typename T>
-    void RecursiveFilterChildNode(
-        dev::p2p::NodeIDs& nodeList, ssize_t const& startIndex, T const& peers)
-    {
-        dev::p2p::NodeID selectedNode;
-        for (ssize_t i = 1; i <= m_broadcastNodes; i++)
-        {
-            ssize_t expectedIdx = startIndex * 3 + i;
-            if (expectedIdx >= m_nodeNum)
-            {
-                break;
-            }
-            // the expectedNode existed in the peers
-            if (getNodeIDByIndex(selectedNode, expectedIdx) && peers.count(selectedNode))
-            {
-                GPBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
-                                       << LOG_KV("chosedNode", selectedNode.abridged())
-                                       << LOG_KV("chosedIdx", expectedIdx);
-                nodeList.push_back(selectedNode);
-            }
-            // selected the child
-            else
-            {
-                RecursiveFilterChildNode(nodeList, expectedIdx, peers);
-            }
-        }
-    }
-
 
 private:
     template <class T, class S>

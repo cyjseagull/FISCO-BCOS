@@ -241,45 +241,6 @@ bool GroupPBFTEngine::locatedInConsensusZone() const
     return locatedInConsensusZone(m_highestBlock.number(), m_zoneId);
 }
 
-
-void GroupPBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq)
-{
-    int packetType = GroupPBFTPacketType::PrepareReqPacket;
-    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    std::set<dev::network::NodeID> peers;
-    for (auto const& session : sessions)
-    {
-        peers.insert(session.nodeID());
-    }
-    auto selectedNodes = NodeIdFilterHandler(peers);
-    NodeIDs targetNodes;
-    for (auto const& nodeId : selectedNodes)
-    {
-        /// packet has been broadcasted?
-        if (broadcastFilter(nodeId, packetType, prepareReq->uniqueKey()))
-        {
-            continue;
-        }
-        targetNodes.push_back(nodeId);
-        broadcastMark(nodeId, packetType, prepareReq->uniqueKey());
-    }
-    if (targetNodes.size() == 0)
-    {
-        return;
-    }
-    bytes prepare_data;
-    prepareReq->encode(prepare_data);
-    GPBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
-                           << LOG_KV("height", prepareReq->height)
-                           << LOG_KV("hash", prepareReq->block_hash.abridged())
-                           << LOG_KV("groupIdx", m_groupIdx) << LOG_KV("zoneId", m_zoneId)
-                           << LOG_KV("idx", m_idx);
-    /// send messages according to node id
-    m_service->asyncMulticastMessageByNodeIDList(
-        targetNodes, transDataToMessage(ref(prepare_data), packetType, 1));
-}
-
-
 /**
  * @brief
  *
