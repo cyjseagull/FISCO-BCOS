@@ -651,7 +651,7 @@ protected:
         // add the child node
         RecursiveFilterChildNode(nodeList, m_idx, peers);
         // add the parent node
-        size_t parentIdx = m_idx / m_broadcastNodes;
+        size_t parentIdx = (m_idx - 1) / m_broadcastNodes;
         // the parentNode is the node-self
         if (parentIdx == m_idx)
         {
@@ -670,7 +670,7 @@ protected:
         {
             while (parentIdx != 0)
             {
-                parentIdx /= m_broadcastNodes;
+                parentIdx = (parentIdx - 1) / m_broadcastNodes;
                 if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
                 {
                     PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")

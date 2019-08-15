@@ -312,7 +312,7 @@ void PBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepa
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
                           << LOG_KV("height", prepareReq->height)
                           << LOG_KV("hash", prepareReq->block_hash.abridged())
-                          << LOG_KV("idx", m_idx);
+                          << LOG_KV("targetNodesSize", targetNodes.size()) << LOG_KV("idx", m_idx);
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
         targetNodes, transDataToMessage(ref(prepare_data), packetType, 1));
@@ -326,11 +326,12 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
     m_notifyNextLeaderSeal = false;
     std::shared_ptr<PrepareReq> prepare_req =
         std::make_shared<PrepareReq>(*block, m_keyPair, m_view, nodeIdx());
+#if 0
     bytes prepare_data;
     prepare_req->encode(prepare_data);
 
 /// broadcast the generated preparePacket
-#if 0
+
     bool succ =
         broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
     if (succ)
@@ -847,6 +848,12 @@ bool PBFTEngine::handlePrepareMsg(
     {
         return false;
     }
+    if (!filterSource(prepare_req, pbftMsg))
+    {
+        return false;
+    }
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("receive prepare message from ")
+                          << LOG_KV("idx", pbftMsg.node_idx);
     return handlePrepareMsg(prepare_req, pbftMsg.endpoint);
 }
 

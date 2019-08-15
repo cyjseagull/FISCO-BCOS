@@ -113,7 +113,7 @@ void GroupPBFTEngine::resetConfig()
             {
                 break;
             }
-            m_broadCastListAmongGroups.insert(m_sealerList[nodeIndex]);
+            m_broadCastListAmongGroups.insert(std::make_pair(m_sealerList[nodeIndex], i));
         }
     }
     GPBFTENGINE_LOG(INFO) << LOG_DESC("reset configure") << LOG_KV("totalNode", m_nodeNum)
@@ -212,18 +212,30 @@ ssize_t GroupPBFTEngine::getGroupIndexBySealer(dev::network::NodeID const& nodeI
 bool GroupPBFTEngine::broadCastMsgAmongGroups(const int packetType, std::string const& key,
     bytesConstRef data, unsigned const& ttl, std::unordered_set<dev::network::NodeID> const& filter)
 {
-    return PBFTEngine::broadcastMsg(packetType, key, data, filter, ttl, m_groupBroadcastFilter);
+    return PBFTEngine::broadcastMsg(
+        packetType, key, data, filter, ttl, [&](dev::network::NodeID const& nodeId) {
+            // shouldn't broadcast to the node
+            if (!m_broadCastListAmongGroups.count(nodeId))
+            {
+                return -1;
+            }
+            if (broadcastFilter(h512(m_broadCastListAmongGroups[nodeId]), packetType, key))
+            {
+                return -1;
+            }
+            // shouldn't broadcast to the node
+            return 1;
+        });
 }
 
 ssize_t GroupPBFTEngine::filterGroupNodeByNodeID(dev::network::NodeID const& nodeId)
 {
-    // should broadcast to the node
-    if (m_broadCastListAmongGroups.count(nodeId))
-    {
-        return 1;
-    }
     // shouldn't broadcast to the node
-    return -1;
+    if (!m_broadCastListAmongGroups.count(nodeId))
+    {
+        return -1;
+    }
+    return 1;
 }
 
 bool GroupPBFTEngine::isLeader()
@@ -258,7 +270,8 @@ bool GroupPBFTEngine::handleSuperSignReq(
         return false;
     }
     std::ostringstream oss;
-    auto zoneId = getZoneByNodeIndex(superSignReq->idx);
+    auto zoneId = superSignReq->idx;
+    broadcastMark(h512(zoneId), pbftMsg.packet_id, superSignReq->uniqueKey());
     commonLogWhenHandleMsg(oss, "handleSuperSignReq", zoneId, superSignReq, pbftMsg);
     // check superSignReq
     CheckResult ret = isValidSuperSignReq(superSignReq, zoneId, oss);
@@ -347,7 +360,7 @@ bool GroupPBFTEngine::broadcastSuperSignMsg()
 {
     // generate the superSignReq
     std::shared_ptr<SuperSignReq> req = std::make_shared<SuperSignReq>(
-        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_idx));
+        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_zoneId));
     // cache superSignReq
     m_groupPBFTReqCache->addSuperSignReq(req, m_zoneId);
     GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndCommit, broadcast and cache SuperSignReq")
@@ -380,7 +393,7 @@ bool GroupPBFTEngine::broadcastSuperCommitMsg()
 {
     // generate SuperCommitReq
     std::shared_ptr<SuperCommitReq> req = std::make_shared<SuperCommitReq>(
-        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_idx));
+        m_groupPBFTReqCache->prepareCache(), VIEWTYPE(m_view), IDXTYPE(m_zoneId));
     // cache SuperCommitReq
     m_groupPBFTReqCache->addSuperCommitReq(req, m_zoneId);
     GPBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave, broadcast and cache SuperCommitReq")
@@ -402,7 +415,8 @@ bool GroupPBFTEngine::handleSuperViewChangeReq(
     {
         return false;
     }
-    auto zoneId = getZoneByNodeIndex(superViewChangeReq->idx);
+    auto zoneId = superViewChangeReq->idx;
+    broadcastMark(h512(zoneId), pbftMsg.packet_id, superViewChangeReq->uniqueKey());
     std::ostringstream oss;
     commonLogWhenHandleMsg(oss, "handleSuperViewChangeReq", zoneId, superViewChangeReq, pbftMsg);
     CheckResult result = isValidSuperViewChangeReq(superViewChangeReq, zoneId, oss);
@@ -420,7 +434,7 @@ bool GroupPBFTEngine::handleSuperViewChangeReq(
                    "located in non-consensus zone and receive superviewchange from consensus zone")
             << LOG_KV("consensusZone", zoneId) << LOG_KV("height", superViewChangeReq->height)
             << LOG_KV("toView", superViewChangeReq->view)
-            << LOG_KV("genIdx", superViewChangeReq->idx)
+            << LOG_KV("genZoneIdx", superViewChangeReq->idx)
             << LOG_KV("hash", superViewChangeReq->block_hash.abridged())
             << LOG_KV("curZone", m_zoneId) << LOG_KV("idx", nodeIdx());
         // broadcast viewchange request to other nodes
@@ -476,8 +490,9 @@ bool GroupPBFTEngine::broadcastViewChange(std::shared_ptr<SuperViewChangeReq> su
 bool GroupPBFTEngine::broadcastSuperViewChangeReq(uint8_t type)
 {
     // generate superViewChangeReq
-    std::shared_ptr<SuperViewChangeReq> req = m_groupPBFTMsgFactory->buildSuperViewChangeReq(
-        m_keyPair, m_highestBlock.number(), m_toView, m_idx, m_highestBlock.hash(), type);
+    std::shared_ptr<SuperViewChangeReq> req =
+        m_groupPBFTMsgFactory->buildSuperViewChangeReq(m_keyPair, m_highestBlock.number(), m_toView,
+            IDXTYPE(m_zoneId), m_highestBlock.hash(), type);
     // cache superViewChangeReq
     m_groupPBFTReqCache->addSuperViewChangeReq(req, m_zoneId);
     GPBFTENGINE_LOG(INFO) << LOG_DESC("broadcast SuperViewChangeReq")
@@ -591,7 +606,8 @@ bool GroupPBFTEngine::handleSuperCommitReq(
     {
         return false;
     }
-    auto zoneId = getZoneByNodeIndex(superCommitReq->idx);
+    auto zoneId = superCommitReq->idx;
+    broadcastMark(h512(zoneId), pbftMsg.packet_id, superCommitReq->uniqueKey());
     std::ostringstream oss;
     commonLogWhenHandleMsg(oss, "handleSuperCommitReq", zoneId, superCommitReq, pbftMsg);
     CheckResult ret = isValidSuperCommitReq(superCommitReq, zoneId, oss);

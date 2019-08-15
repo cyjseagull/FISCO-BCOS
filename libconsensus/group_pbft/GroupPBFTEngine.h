@@ -369,7 +369,7 @@ protected:
 
 
     mutable SharedMutex x_broadCastListAmongGroups;
-    std::set<h512> m_broadCastListAmongGroups;
+    std::map<h512, int64_t> m_broadCastListAmongGroups;
 
     // functions
     std::function<ssize_t(dev::network::NodeID const&)> m_groupBroadcastFilter = nullptr;
