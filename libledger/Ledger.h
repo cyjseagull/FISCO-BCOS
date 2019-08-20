@@ -147,7 +147,7 @@ protected:
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);
 
-    std::shared_ptr<dev::consensus::PBFTEngineFactory> createPBFTEngineFactory();
+    std::shared_ptr<dev::consensus::ConsensusEngineFactory> createPBFTEngineFactory();
     std::shared_ptr<dev::consensus::PBFTReqFactory> createPBFTReqFactory();
 
     std::shared_ptr<dev::consensus::PBFTMsgFactoryInterface> createPBFTMsgFactory();
@@ -159,6 +159,9 @@ private:
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
+    // create hotstuff Sealer
+    std::shared_ptr<dev::consensus::Sealer> createHotStuffSealer();
+
     /// init configurations
     void initCommonConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);

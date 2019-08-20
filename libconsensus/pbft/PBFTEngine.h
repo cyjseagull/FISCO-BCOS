@@ -27,8 +27,8 @@
 #include "PBFTMsgFactory.h"
 #include "PBFTReqCache.h"
 #include "PBFTReqFactory.h"
-#include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
+#include <libconsensus/TimeManager.h>
 #include <libdevcore/FileSystem.h>
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/concurrent_queue.h>
@@ -60,11 +60,10 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
+        dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _sealerList),
-        m_baseDir(_baseDir)
+            _keyPair, _sealerList)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("Register handler for PBFTEngine");
         m_service->registerHandlerByProtoclID(
@@ -80,7 +79,6 @@ public:
             &PBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
         m_broadcastFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
     }
-
     void broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq);
     void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
     {
@@ -229,7 +227,6 @@ protected:
     void handleFutureBlock();
     void collectGarbage();
     virtual void checkTimeout();
-    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     inline void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
@@ -303,8 +300,6 @@ protected:
     void updateBasicStatus();
 
     void initPBFTEnv(unsigned _view_timeout);
-    /// recalculate m_nodeNum && m_f && m_cfgErr(must called after setSigList)
-    void resetConfig() override;
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _msg);
     void backupMsg(std::string const& _key, std::shared_ptr<PBFTMsg> _msg);
@@ -335,36 +330,6 @@ protected:
         m_broadCastCache->insertKey(nodeId, packetType, key);
     }
     inline void clearMask() { m_broadCastCache->clearAll(); }
-    /// get the index of specified sealer according to its node id
-    /// @param nodeId: the node id of the sealer
-    /// @return : 1. >0: the index of the sealer
-    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    virtual ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
-    {
-        ReadGuard l(m_sealerListMutex);
-        ssize_t index = -1;
-        for (size_t i = 0; i < m_sealerList.size(); ++i)
-        {
-            if (m_sealerList[i] == nodeId)
-            {
-                index = i;
-                break;
-            }
-        }
-        return index;
-    }
-    /// get the node id of specified sealer according to its index
-    /// @param index: the index of the node
-    /// @return h512(): the node is not in the sealer list
-    /// @return node id: the node id of the node
-    inline dev::network::NodeID getSealerByIndex(size_t const& index) const
-    {
-        ReadGuard l(m_sealerListMutex);
-        if (index < m_sealerList.size())
-            return m_sealerList[index];
-        return dev::network::NodeID();
-    }
-
     /// trans data into message
     inline dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef data,
         PACKET_TYPE const& packetType, PROTOCOL_ID const& protocolId, unsigned const& ttl)
@@ -391,40 +356,6 @@ protected:
         bytesConstRef data, PACKET_TYPE const& packetType, unsigned const& ttl)
     {
         return transDataToMessage(data, packetType, m_protocolId, ttl);
-    }
-
-    /**
-     * @brief : the message received from the network is valid or not?
-     *      invalid cases: 1. received data is empty
-     *                     2. the message is not sended by sealers
-     *                     3. the message is not receivied by sealers
-     *                     4. the message is sended by the node-self
-     * @param message : message constructed from data received from the network
-     * @param session : the session related to the network data(can get informations about the
-     * sender)
-     * @return true : the network-received message is valid
-     * @return false: the network-received message is invalid
-     */
-    bool isValidReq(dev::p2p::P2PMessage::Ptr message,
-        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex) override
-    {
-        /// check message size
-        if (message->buffer()->size() <= 0)
-            return false;
-        /// check whether in the sealer list
-        peerIndex = getIndexBySealer(session->nodeID());
-        if (peerIndex < 0)
-        {
-            PBFTENGINE_LOG(TRACE) << LOG_DESC(
-                "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
-            return false;
-        }
-        /// check whether this node is in the sealer list
-        dev::network::NodeID node_id;
-        bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
-        if (!is_sealer || session->nodeID() == node_id)
-            return false;
-        return true;
     }
 
     /// check the specified prepareReq is valid or not

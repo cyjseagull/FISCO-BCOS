@@ -29,6 +29,7 @@
  */
 #pragma once
 #include "PBFTEngineFactory.h"
+#include <libconsensus/ConsensusEngineFactory.h>
 #include <libconsensus/Sealer.h>
 #include <sstream>
 namespace dev
@@ -44,13 +45,13 @@ public:
       : Sealer(_txPool, _blockChain, _blockSync)
     {}
 
-    void setPBFTEngineFactory(std::shared_ptr<PBFTEngineFactory> pbftEngineFactory)
+    void setConsensusEngineFactory(std::shared_ptr<ConsensusEngineFactory> pbftEngineFactory)
     {
         m_pbftEngineFactory = pbftEngineFactory;
     }
 
     // create PBFTEngine by
-    virtual std::shared_ptr<PBFTEngine> createPBFTEngine(
+    virtual std::shared_ptr<PBFTEngine> createConsensusEngine(
         std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -59,9 +60,10 @@ public:
         dev::PROTOCOL_ID const& _protocolId, std::string const& _baseDir, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
     {
-        m_pbftEngine = m_pbftEngineFactory->createPBFTEngine(_service, _txPool, _blockChain,
-            _blockSync, _blockVerifier, _protocolId, _baseDir, _keyPair, _sealerList);
-        m_consensusEngine = m_pbftEngine;
+        m_consensusEngine = m_pbftEngineFactory->createConsensusEngine(_service, _txPool,
+            _blockChain, _blockSync, _blockVerifier, _protocolId, _keyPair, _sealerList);
+        m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
+        m_pbftEngine->setBaseDir(_baseDir);
 
         /// called by viewchange procedure to reset block when timeout
         m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
@@ -122,7 +124,6 @@ protected:
     {
         return m_pbftEngine->canHandleBlockForNextLeader();
     }
-    void setBlock();
     void attempIncreaseTimeoutTx();
 
 private:
@@ -178,7 +179,7 @@ private:
 
 protected:
     std::shared_ptr<PBFTEngine> m_pbftEngine = nullptr;
-    std::shared_ptr<PBFTEngineFactory> m_pbftEngineFactory = nullptr;
+    std::shared_ptr<ConsensusEngineFactory> m_pbftEngineFactory = nullptr;
     /// the minimum number of transactions that caused timeout
     uint64_t m_lastTimeoutTx = 0;
     /// the maximum number of transactions that has been consensused without timeout

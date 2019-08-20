@@ -31,6 +31,7 @@
 #include <libethcore/BlockFactory.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
+#include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -42,6 +43,7 @@ namespace consensus
 class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
+    using Ptr = std::shared_ptr<ConsensusEngineBase>;
     ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -156,25 +158,76 @@ public:
         m_blockFactory = blockFactory;
     }
 
-protected:
-    virtual void resetConfig() { m_nodeNum = m_sealerList.size(); }
-    void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
     /// get the node id of specified sealer according to its index
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    inline h512 getSealerByIndex(size_t const& index) const
+    dev::network::NodeID getSealerByIndex(size_t const& index) const
     {
+        ReadGuard l(m_sealerListMutex);
         if (index < m_sealerList.size())
             return m_sealerList[index];
-        return h512();
+        return dev::network::NodeID();
     }
 
-    virtual bool isValidReq(
-        std::shared_ptr<dev::p2p::P2PMessage>, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
+    bool getNodeIDByIndex(h512& nodeID, const IDXTYPE& idx) const;
+
+    /// get the index of specified sealer according to its node id
+    /// @param nodeId: the node id of the sealer
+    /// @return : 1. >0: the index of the sealer
+    ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
+    virtual ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
     {
-        return false;
+        ReadGuard l(m_sealerListMutex);
+        ssize_t index = -1;
+        for (size_t i = 0; i < m_sealerList.size(); ++i)
+        {
+            if (m_sealerList[i] == nodeId)
+            {
+                index = i;
+                break;
+            }
+        }
+        return index;
     }
+
+protected:
+    virtual void resetConfig();
+    void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }
+    /**
+     * @brief : the message received from the network is valid or not?
+     *      invalid cases: 1. received data is empty
+     *                     2. the message is not sended by sealers
+     *                     3. the message is not receivied by sealers
+     *                     4. the message is sended by the node-self
+     * @param message : message constructed from data received from the network
+     * @param session : the session related to the network data(can get informations about the
+     * sender)
+     * @return true : the network-received message is valid
+     * @return false: the network-received message is invalid
+     */
+    virtual bool isValidReq(dev::p2p::P2PMessage::Ptr message,
+        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex)
+    {
+        /// check message size
+        if (message->buffer()->size() <= 0)
+            return false;
+        /// check whether in the sealer list
+        peerIndex = getIndexBySealer(session->nodeID());
+        if (peerIndex < 0)
+        {
+            ENGINE_LOG(TRACE) << LOG_DESC(
+                "isValidReq: Recv PBFT msg from unkown peer:" + session->nodeID().abridged());
+            return false;
+        }
+        /// check whether this node is in the sealer list
+        dev::network::NodeID node_id;
+        bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
+        if (!is_sealer || session->nodeID() == node_id)
+            return false;
+        return true;
+    }
+
     /**
      * @brief: decode the network-received message to corresponding message(PBFTMsgPacket)
      *
@@ -244,6 +297,21 @@ protected:
         }
         ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
+    }
+
+    // encode the given message into P2PMessage
+    template <typename T>
+    dev::p2p::P2PMessage::Ptr encodeToP2PMessage(std::shared_ptr<T> message)
+    {
+        dev::p2p::P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+            m_service->p2pMessageFactory()->buildMessage());
+        std::shared_ptr<bytes> p_encodeData = std::make_shared<dev::bytes>();
+        message->encode(*p_encodeData);
+        p2pMessage->setBuffer(p_encodeData);
+        p2pMessage->setProtocolID(m_protocolId);
+        // set packetType
+        p2pMessage->setPacketType(message->type());
+        return p2pMessage;
     }
 
 private:

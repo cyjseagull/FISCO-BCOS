@@ -28,6 +28,8 @@
 #include <libconsensus/group_pbft/GroupPBFTEngineFactory.h>
 #include <libconsensus/group_pbft/GroupPBFTMsgFactory.h>
 #include <libconsensus/group_pbft/GroupPBFTReqFactory.h>
+#include <libconsensus/hotstuff/HotStuffEngine.h>
+#include <libconsensus/hotstuff/HotStuffSealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
@@ -535,7 +537,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 }
 
 
-std::shared_ptr<PBFTEngineFactory> Ledger::createPBFTEngineFactory()
+std::shared_ptr<ConsensusEngineFactory> Ledger::createPBFTEngineFactory()
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
@@ -609,6 +611,26 @@ void Ledger::initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbf
         m_param->mutableConsensusParam().switchBlockNum);
 }
 
+
+/**
+ * @brief: create HotStuffEngine
+ *
+ * @return std::shared_ptr<dev::consensus::Sealer>
+ */
+std::shared_ptr<dev::consensus::Sealer> Ledger::createHotStuffSealer()
+{
+    Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_BADGE("createHotStuffSealer");
+    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::HotStuff);
+    std::shared_ptr<HotStuffSealer> hotStuffSealer =
+        std::make_shared<HotStuffSealer>(m_txPool, m_blockChain, m_sync);
+    std::shared_ptr<ConsensusEngineFactory> hotstuffEngineFactory =
+        std::make_shared<HotStuffEngineFactory>();
+    hotStuffSealer->setConsensusEngineFactory(hotstuffEngineFactory);
+    hotStuffSealer->createConsensusEngine(m_service, m_txPool, m_blockChain, m_sync,
+        m_blockVerifier, protocol_id, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    return hotStuffSealer;
+}
+
 /**
  * @brief: create PBFTEngine
  * @param param: Ledger related params
@@ -630,15 +652,15 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     std::shared_ptr<PBFTSealer> pbftSealer =
         std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
 
-    std::shared_ptr<PBFTEngineFactory> pbftEngineFactory = createPBFTEngineFactory();
+    std::shared_ptr<ConsensusEngineFactory> pbftEngineFactory = createPBFTEngineFactory();
     if (!pbftEngineFactory)
     {
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
                                   "create PBFTEngineFactory failed, maybe unsupportConsensusType " +
                                   m_param->mutableConsensusParam().consensusType));
     }
-    pbftSealer->setPBFTEngineFactory(pbftEngineFactory);
-    std::shared_ptr<PBFTEngine> pbftEngine = pbftSealer->createPBFTEngine(m_service, m_txPool,
+    pbftSealer->setConsensusEngineFactory(pbftEngineFactory);
+    std::shared_ptr<PBFTEngine> pbftEngine = pbftSealer->createConsensusEngine(m_service, m_txPool,
         m_blockChain, m_sync, m_blockVerifier, protocol_id, m_param->baseDir(), m_keyPair,
         m_param->mutableConsensusParam().sealerList);
 
@@ -692,6 +714,13 @@ bool Ledger::consensusInitFactory()
         /// create PBFTSealer
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create pbft!");
         m_sealer = createPBFTSealer();
+    }
+    // create hotstuff
+    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "hotstuff") ==
+             0)
+    {
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create hotstuff!");
+        m_sealer = createHotStuffSealer();
     }
     else
     {

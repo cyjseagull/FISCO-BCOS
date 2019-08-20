@@ -159,6 +159,9 @@ protected:
     /// reset the sealing Header after loadTransactions, before generate and broadcast local prepare
     /// message
     void resetSealingHeader(dev::eth::BlockHeader& header);
+
+    void setBlock();
+
     /// reset timestamp of block header
     void resetCurrentTime()
     {

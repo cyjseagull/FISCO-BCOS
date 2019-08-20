@@ -14,41 +14,35 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2019 fisco-dev contributors.
  */
-
 /**
- * @brief : factory used to create specified GroupPBFTEngine
- * @file: GroupPBFTEngine.h
+ * @brief : factory used to create PBFTEngine
+ * @file: PBFTEngineFactory.h
  * @author: yujiechen
- * @date: 2019-06-11
+ *
+ * @date: 2019-06-24
+ *
  */
-
 #pragma once
-#include "GroupPBFTEngine.h"
-#include <libconsensus/ConsensusEngineFactory.h>
-#include <libconsensus/pbft/PBFTEngineFactory.h>
-
+#include "ConsensusEngineBase.h"
 namespace dev
 {
 namespace consensus
 {
-class GroupPBFTEngineFactory : public ConsensusEngineFactory
+class ConsensusEngineFactory
 {
 public:
-    GroupPBFTEngineFactory() {}
-    virtual ~GroupPBFTEngineFactory() {}
-    std::shared_ptr<ConsensusEngineBase> createConsensusEngine(
+    using Ptr = std::shared_ptr<ConsensusEngineFactory>;
+    ConsensusEngineFactory() {}
+    virtual ~ConsensusEngineFactory() {}
+
+    virtual std::shared_ptr<ConsensusEngineBase> createConsensusEngine(
         std::shared_ptr<dev::p2p::P2PInterface> service,
         std::shared_ptr<dev::txpool::TxPoolInterface> txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain,
         std::shared_ptr<dev::sync::SyncInterface> blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier,
         dev::PROTOCOL_ID const& protocolId, KeyPair const& keyPair,
-        h512s const& sealerList = h512s()) override
-    {
-        std::shared_ptr<GroupPBFTEngine> groupPBFTEngine = std::make_shared<GroupPBFTEngine>(
-            service, txPool, blockChain, blockSync, blockVerifier, protocolId, keyPair, sealerList);
-        return groupPBFTEngine;
-    }
+        h512s const& sealerList = h512s()) = 0;
 };
 }  // namespace consensus
 }  // namespace dev

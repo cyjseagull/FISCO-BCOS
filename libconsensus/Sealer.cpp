@@ -179,6 +179,14 @@ void Sealer::resetSealingBlock(
     sealing->p_execContext = nullptr;
 }
 
+void Sealer::setBlock()
+{
+    m_sealing->block->header().populateFromParent(
+        m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+    resetSealingHeader(m_sealing->block->header());
+    m_sealing->block->calTransactionRoot();
+}
+
 /**
  * @brief : reset specified block according to 'resetNextLeader' option
  *

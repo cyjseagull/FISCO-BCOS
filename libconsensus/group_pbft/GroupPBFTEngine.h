@@ -40,10 +40,10 @@ public:
         std::shared_ptr<dev::blockchain::BlockChainInterface> blockchain,
         std::shared_ptr<dev::sync::SyncInterface> sync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier,
-        dev::PROTOCOL_ID const& protocolId, std::string const& baseDir, KeyPair const& keyPair,
+        dev::PROTOCOL_ID const& protocolId, KeyPair const& keyPair,
         h512s const& sealerList = h512s())
-      : PBFTEngine(service, txPool, blockchain, sync, blockVerifier, protocolId, baseDir, keyPair,
-            sealerList)
+      : PBFTEngine(
+            service, txPool, blockchain, sync, blockVerifier, protocolId, keyPair, sealerList)
     {
         // filter for broadcastMsgAmongGroup
         m_groupBroadcastFilter = boost::bind(&GroupPBFTEngine::filterGroupNodeByNodeID, this, _1);

@@ -24,41 +24,27 @@
  */
 #pragma once
 #include "PBFTEngine.h"
+#include <libconsensus/ConsensusEngineFactory.h>
 namespace dev
 {
 namespace consensus
 {
-class PBFTEngineFactoryInterface
+class PBFTEngineFactory : public ConsensusEngineFactory
 {
 public:
-    PBFTEngineFactoryInterface() {}
-    virtual ~PBFTEngineFactoryInterface() {}
-
-    virtual std::shared_ptr<PBFTEngine> createPBFTEngine(
+    PBFTEngineFactory() {}
+    virtual ~PBFTEngineFactory() {}
+    std::shared_ptr<ConsensusEngineBase> createConsensusEngine(
         std::shared_ptr<dev::p2p::P2PInterface> service,
         std::shared_ptr<dev::txpool::TxPoolInterface> txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain,
         std::shared_ptr<dev::sync::SyncInterface> blockSync,
         std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier,
-        dev::PROTOCOL_ID const& protocolId, std::string const& baseDir, KeyPair const& keyPair,
-        h512s const& sealerList = h512s()) = 0;
-};
-
-class PBFTEngineFactory : public PBFTEngineFactoryInterface
-{
-public:
-    PBFTEngineFactory() {}
-    virtual ~PBFTEngineFactory() {}
-    std::shared_ptr<PBFTEngine> createPBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier,
-        dev::PROTOCOL_ID const& protocolId, std::string const& baseDir, KeyPair const& keyPair,
+        dev::PROTOCOL_ID const& protocolId, KeyPair const& keyPair,
         h512s const& sealerList = h512s()) override
     {
-        std::shared_ptr<PBFTEngine> pbftEngine = std::make_shared<PBFTEngine>(service, txPool,
-            blockChain, blockSync, blockVerifier, protocolId, baseDir, keyPair, sealerList);
+        std::shared_ptr<PBFTEngine> pbftEngine = std::make_shared<PBFTEngine>(
+            service, txPool, blockChain, blockSync, blockVerifier, protocolId, keyPair, sealerList);
         return pbftEngine;
     }
 };

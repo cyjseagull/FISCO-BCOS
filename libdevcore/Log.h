@@ -48,7 +48,7 @@ enum LogLevel
 #define INITIALIZE_EASYLOGGINGPP \
     void Empty() {}
 
-#define LOG(level)                        \
-    BOOST_LOG_SEV(dev::FileLoggerHandler, \
-        (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
+#define LOG(level) \
+    BOOST_LOG_SEV( \
+        dev::FileLoggerHandler, (boost::log::v2s_mt_posix::trivial::severity_level)(level))
 }  // namespace dev

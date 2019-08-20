@@ -11,5 +11,8 @@ include_directories(./raft)
 aux_source_directory(./group_pbft SRC_LIST)
 include_directories(./group_pbft)
 
+aux_source_directory(./hotstuff SRC_LIST)
+include_directories(./hotstuff)
+
 add_library(consensus ${SRC_LIST} ${HEADERS})
 target_link_libraries(consensus PUBLIC sync blockverifier p2p security)
