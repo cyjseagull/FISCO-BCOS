@@ -170,6 +170,8 @@ protected:
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
     std::atomic<int64_t> m_consensusBlockNumber = {0};
+    // commit empty block or not
+    std::atomic_bool m_omitEmptyBlock = {true};
 
     dev::concurrent_queue<dev::p2p::P2PMessage::Ptr> m_hotstuffMsgQueue;
     std::condition_variable m_signalled;
