@@ -37,6 +37,10 @@ public:
         IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
         VIEWTYPE const& _view) = 0;
 
+    virtual QuorumCert::Ptr buildQuorumCert(KeyPair const& keyPair, int const& _type,
+        IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
+        VIEWTYPE const& _view) = 0;
+
     virtual HotStuffNewViewMsg::Ptr buildHotStuffNewViewMsg(KeyPair const& keyPair,
         IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
         VIEWTYPE const& _view, VIEWTYPE const& _justifyView) = 0;
@@ -76,6 +80,13 @@ public:
         int packetType = HotStuffPacketType::NewViewPacket;
         return std::make_shared<HotStuffNewViewMsg>(
             keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyView);
+    }
+
+    QuorumCert::Ptr buildQuorumCert(KeyPair const& keyPair, int const& _type, IDXTYPE const& _idx,
+        h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
+        VIEWTYPE const& _view) override
+    {
+        return std::make_shared<QuorumCert>(keyPair, _type, _idx, _blockHash, _blockHeight, _view);
     }
 };
 

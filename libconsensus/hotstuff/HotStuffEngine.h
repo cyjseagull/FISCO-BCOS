@@ -93,8 +93,9 @@ protected:
     HotStuffPrepareMsg::Ptr execBlock(HotStuffPrepareMsg::Ptr rawPrepareMsg);
 
     virtual bool handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg);
-    virtual void checkAndGenerateQC(
+    virtual QuorumCert::Ptr checkAndGenerateQC(
         size_t const& cacheSize, HotStuffMsg::Ptr voteMsg, int const packetType);
+
     void checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg);
 
     virtual bool isValidVoteMsg(HotStuffMsg::Ptr voteMsg);

@@ -440,7 +440,7 @@ bool HotStuffEngine::handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg)
     return true;
 }
 
-void HotStuffEngine::checkAndGenerateQC(
+QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
     size_t const& cacheSize, HotStuffMsg::Ptr voteMsg, int const packetType)
 {
     if (cacheSize == minValidNodes())
@@ -452,10 +452,11 @@ void HotStuffEngine::checkAndGenerateQC(
                                  << LOG_KV("reqView", voteMsg->view())
                                  << LOG_KV("cacheSize", cacheSize) << LOG_KV("view", m_view)
                                  << LOG_KV("idx", nodeIdx());
-        HotStuffMsg::Ptr QCMsg = m_hotStuffMsgFactory->buildHotStuffMsg(
+        HotStuffMsg::Ptr QCMsg = m_hotStuffMsgFactory->buildQuorumCert(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
         // broadcast message to the replias
         broadCastMsg(QCMsg);
+        return QCMsg;
     }
 }
 
@@ -463,7 +464,9 @@ void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
 {
     // check collect enough prepareMessage or not
     size_t prepareVoteSize = m_hotStuffMsgCache->getPrepareCacheSize(prepareMsg->blockHash());
-    checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacekt);
+    auto prepareQCMsg =
+        checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacekt);
+    m_hotStuffMsgCache->setPrepareQC(prepareQCMsg);
 }
 
 bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
@@ -639,7 +642,6 @@ bool HotStuffEngine::isValidVoteMsg(HotStuffMsg::Ptr voteMsg)
             << LOG_KV("reqView", voteMsg->view()) << LOG_KV("prepareQCView", curPrepareQC->view())
             << LOG_KV("reqIdx", voteMsg->idx()) << LOG_KV("prepareQCIdx", curPrepareQC->idx())
             << LOG_KV("curView", m_view) << LOG_KV("idx", nodeIdx());
-        return false;
     }
     return true;
 }
@@ -656,7 +658,9 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
     m_hotStuffMsgCache->addPreCommitCache(preCommitMsg);
     size_t cachedPrecommitSize =
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash()) + 1;
-    checkAndGenerateQC(cachedPrecommitSize, preCommitMsg, HotStuffPacketType::PrecommitQCPacket);
+    auto lockedQCMsg = checkAndGenerateQC(
+        cachedPrecommitSize, preCommitMsg, HotStuffPacketType::PrecommitQCPacket);
+    m_hotStufMsgCache->addLockedQC(lockedQCMsg);
     return true;
 }
 
