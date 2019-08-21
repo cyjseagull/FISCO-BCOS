@@ -265,6 +265,7 @@ bool HotStuffEngine::sendMessageToLeader(HotStuffMsg::Ptr msg)
 // send Next-View message to the leader when timeout
 void HotStuffEngine::triggerNextView()
 {
+    m_view += 1;
     auto curPrepareQC = m_hotStuffMsgCache->prepareQC();
     HotStuffNewViewMsg::Ptr newViewMessage = nullptr;
     if (curPrepareQC)
@@ -458,6 +459,7 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
         broadCastMsg(QCMsg);
         return QCMsg;
     }
+    return nullptr;
 }
 
 void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
@@ -466,7 +468,10 @@ void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
     size_t prepareVoteSize = m_hotStuffMsgCache->getPrepareCacheSize(prepareMsg->blockHash());
     auto prepareQCMsg =
         checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacekt);
-    m_hotStuffMsgCache->setPrepareQC(prepareQCMsg);
+    if (prepareQCMsg)
+    {
+        m_hotStuffMsgCache->setPrepareQC(prepareQCMsg);
+    }
 }
 
 bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
@@ -660,7 +665,11 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash()) + 1;
     auto lockedQCMsg = checkAndGenerateQC(
         cachedPrecommitSize, preCommitMsg, HotStuffPacketType::PrecommitQCPacket);
-    m_hotStuffMsgCache->addLockedQC(lockedQCMsg);
+    if (lockedQCMsg)
+    {
+        m_hotStuffMsgCache->addLockedQC(lockedQCMsg);
+    }
+
     return true;
 }
 
@@ -761,7 +770,6 @@ bool HotStuffEngine::commitBlock()
         m_hotStuffMsgCache->resetCacheAfterCommit(
             m_hotStuffMsgCache->executedPrepareCache()->blockHash());
         m_hotStuffMsgCache->removeInvalidViewChange(m_view);
-        m_view += 1;
         return true;
     }
     else

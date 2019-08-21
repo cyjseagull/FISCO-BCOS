@@ -35,14 +35,7 @@ class HotStuffMsgCache
 public:
     using Ptr = std::shared_ptr<HotStuffMsgCache>;
 
-    HotStuffMsgCache()
-    {
-        m_executedPrepareCache = std::make_shared<HotStuffPrepareMsg>();
-        m_rawPrepareCache = std::make_shared<HotStuffMsg>();
-        m_lockedQC = std::make_shared<QuorumCert>();
-        m_prepareQC = std::make_shared<QuorumCert>();
-    }
-
+    HotStuffMsgCache() = default;
     ~HotStuffMsgCache() {}
     // check the existence of the message
     bool existedRawPrepare(h256 const& blockHash);
