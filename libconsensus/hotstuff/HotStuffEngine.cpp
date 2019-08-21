@@ -660,7 +660,7 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash()) + 1;
     auto lockedQCMsg = checkAndGenerateQC(
         cachedPrecommitSize, preCommitMsg, HotStuffPacketType::PrecommitQCPacket);
-    m_hotStufMsgCache->addLockedQC(lockedQCMsg);
+    m_hotStuffMsgCache->addLockedQC(lockedQCMsg);
     return true;
 }
 
