@@ -162,6 +162,8 @@ protected:
         return decodedMsg;
     }
 
+    virtual bool omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg);
+
 protected:
     // the highest blockHeader
     dev::eth::BlockHeader m_highestBlockHeader;

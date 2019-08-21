@@ -365,6 +365,34 @@ void HotStuffEngine::triggerGeneratePrepare()
     }
 }
 
+bool HotStuffEngine::omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg)
+{
+    if (!m_omitEmptyBlock)
+    {
+        return false;
+    }
+    // empty block
+    if (0 == prepareMsg->getBlock()->getTransactionSize())
+    {
+        HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("omit empty block")
+                                 << LOG_KV("hash", prepareMsg->blockHash().abridged())
+                                 << LOG_KV("height", prepareMsg->blockHeight())
+                                 << LOG_KV("view", prepareMsg->view())
+                                 << LOG_KV("idx", prepareMsg->idx());
+        // update the consensus time
+        m_timeManager->m_lastConsensusTime = utcTime();
+        // update changeCycle
+        m_timeManager->m_changeCycle = 0;
+        m_hotStuffMsgCache->resetCacheAfterCommit(
+            m_hotStuffMsgCache->executedPrepareCache()->blockHash());
+        m_hotStuffMsgCache->removeInvalidViewChange(m_view);
+        // trigger next view
+        triggerNextView();
+        return true;
+    }
+    return false;
+}
+
 // the leader generate prepare message and broadcast it to the replias
 void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block> block)
 {
@@ -381,18 +409,6 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
     broadCastMsg(prepareMsg);
 
     Guard l(m_mutex);
-    // empty block
-    if (m_omitEmptyBlock && 0 == block.getTransactionSize())
-    {
-        HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("generateAndBroadcastPrepare: omit empty block")
-                                 << LOG_KV("hash", prepareMsg->blockHash().abridged())
-                                 << LOG_KV("height", prepareMsg->blockHeight())
-                                 << LOG_KV("view", prepareMsg->view())
-                                 << LOG_KV("idx", prepareMsg->idx());
-
-        triggerNextView();
-        return;
-    }
     // handle the prepareMsg
     handlePrepareMsg(prepareMsg);
 }
@@ -484,6 +500,11 @@ void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
         checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacekt);
     if (prepareQCMsg)
     {
+        // need omit prepareMsg
+        if (omitEmptyBlock(m_hotStuffMsgCache->executedPrepareCache()))
+        {
+            return;
+        }
         m_hotStuffMsgCache->setPrepareQC(prepareQCMsg);
     }
 }
@@ -522,14 +543,6 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     {
         return false;
     }
-    if (m_omitEmptyBlock && 0 == prepareMsg->getBlock()->getTransactionSize())
-    {
-        printHotStuffMsgInfo(
-            prepareMsg, "handlePrepareMsg: omit empty block and trigger next view");
-        triggerNextView();
-        return;
-    }
-
     printHotStuffMsgInfo(prepareMsg, "handlePrepareMsg and addRawPrepare", INFO);
     // cache the rawprepare received from leader
     m_hotStuffMsgCache->addRawPrepare(prepareMsg);
@@ -640,6 +653,11 @@ bool HotStuffEngine::onReceivePrepareQCMsg(QuorumCert::Ptr prepareQC)
     if (!onReceiveQCMsg(prepareQC, HotStuffPacketType::PrecommitVotePacket))
     {
         return false;
+    }
+    // omitEmptyBlock directly
+    if (omitEmptyBlock(m_hotStuffMsgCache->executedPrepareCache()))
+    {
+        return true;
     }
     printHotStuffMsgInfo(prepareQC, "onReceivePrepareQCMsg: set the prepareQC", INFO);
     m_hotStuffMsgCache->setPrepareQC(prepareQC);
