@@ -71,6 +71,12 @@ public:
     virtual bool reachMinBlockGenTime();
     void generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block> block);
 
+    // empty block
+    virtual bool shouldReset(std::shared_ptr<dev::eth::Block> block)
+    {
+        return block->getTransactionSize() == 0 && m_omitEmptyBlock;
+    }
+
 protected:
     // handle the received message
     void workLoop() override;
@@ -144,12 +150,6 @@ protected:
     void printHotStuffMsgInfo(
         HotStuffMsg::Ptr msg, std::string const& descMsg, LogLevel const& level = INFO);
     virtual void initHotStuff();
-    // empty block
-    virtual bool shouldReset(std::shared_ptr<dev::eth::Block> block)
-    {
-        return block->getTransactionSize() == 0 && m_omitEmptyBlock;
-    }
-
     virtual void handleMsg(dev::p2p::P2PMessage::Ptr p2pMessage);
     virtual void checkTimeout();
 

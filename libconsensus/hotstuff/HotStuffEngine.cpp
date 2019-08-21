@@ -654,11 +654,6 @@ bool HotStuffEngine::onReceivePrepareQCMsg(QuorumCert::Ptr prepareQC)
     {
         return false;
     }
-    // omitEmptyBlock directly
-    if (omitEmptyBlock(m_hotStuffMsgCache->executedPrepareCache()))
-    {
-        return true;
-    }
     printHotStuffMsgInfo(prepareQC, "onReceivePrepareQCMsg: set the prepareQC", INFO);
     m_hotStuffMsgCache->setPrepareQC(prepareQC);
     return true;
@@ -721,6 +716,11 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
     }
     // check hash
     if (!m_hotStuffMsgCache->existedExecutedPrepare(QCMsg->blockHash()))
+    {
+        return false;
+    }
+    // omitEmptyBlock directly
+    if (omitEmptyBlock(m_hotStuffMsgCache->executedPrepareCache()))
     {
         return false;
     }

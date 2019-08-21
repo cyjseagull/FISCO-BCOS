@@ -67,14 +67,12 @@ void HotStuffSealer::handleBlock()
                              << LOG_KV("hash", m_sealing->block->header().hash().abridged());
 
     m_hotStuffEngine->generateAndBroadcastPrepare(m_sealing->block);
-#if 0
-    if(m_hotStuffEngine->shouldReset(m_sealing->block))
+    if (m_hotStuffEngine->shouldReset(m_sealing->block))
     {
         resetSealingBlock();
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
-#endif
     m_canBroadCastPrepare = false;
 }
 
