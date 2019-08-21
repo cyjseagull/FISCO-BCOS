@@ -64,7 +64,7 @@ public:
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         VIEWTYPE const& _justifyView) override
     {
-        int packetType = HotStuffPacketType::NewViewPacket;
+        int packetType = HotStuffPacketType::PreparePacket;
         return std::make_shared<HotStuffPrepareMsg>(
             keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyView);
     }
@@ -73,7 +73,7 @@ public:
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         VIEWTYPE const& _justifyView) override
     {
-        int packetType = HotStuffPacketType::PreparePacket;
+        int packetType = HotStuffPacketType::NewViewPacket;
         return std::make_shared<HotStuffNewViewMsg>(
             keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyView);
     }

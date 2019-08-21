@@ -40,6 +40,7 @@ public:
     // check the existence of the message
     bool existedRawPrepare(h256 const& blockHash);
     bool existedExecutedPrepare(h256 const& blockHash);
+    bool existedInPrepareQC(h256 const& blockHash);
     bool existedLockedQC(h256 const& blockHash);
     bool existedPrepareMsg(h256 const& blockHash);
 
@@ -74,6 +75,9 @@ public:
 
     VIEWTYPE getMaxJustifyView(VIEWTYPE const& curView);
 
+    // collect cache periodly
+    virtual void collectCache(dev::eth::BlockHeader const& highestBlockHeader);
+
 protected:
     template <typename T, typename U, typename S>
     void addCache(T& cache, std::shared_ptr<U> msg, S const& mainKey)
@@ -99,6 +103,32 @@ protected:
             return;
         }
         cache.erase(key);
+    }
+
+    /// remove invalid requests cached in cache according to current block
+    template <typename T, typename U, typename S>
+    void inline removeInvalidEntryFromCache(dev::eth::BlockHeader const& highestBlockHeader,
+        std::unordered_map<T, std::unordered_map<U, S>>& cache)
+    {
+        for (auto it = cache.begin(); it != cache.end();)
+        {
+            for (auto cache_entry = it->second.begin(); cache_entry != it->second.end();)
+            {
+                /// delete expired cache
+                if (cache_entry->second->blockHeight() < highestBlockHeader.number())
+                    cache_entry = it->second.erase(cache_entry);
+                /// in case of faked block hash
+                else if (cache_entry->second->blockHeight() == highestBlockHeader.number() &&
+                         cache_entry->second->blockHash() != highestBlockHeader.hash())
+                    cache_entry = it->second.erase(cache_entry);
+                else
+                    cache_entry++;
+            }
+            if (it->second.size() == 0)
+                it = cache.erase(it);
+            else
+                it++;
+        }
     }
 
 private:

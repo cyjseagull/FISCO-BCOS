@@ -34,6 +34,7 @@ bool HotStuffMsgCache::existedRawPrepare(h256 const& blockHash)
     }
     return (m_rawPrepareCache->blockHash() == blockHash);
 }
+
 bool HotStuffMsgCache::existedExecutedPrepare(h256 const& blockHash)
 {
     if (!m_executedPrepareCache)
@@ -41,6 +42,15 @@ bool HotStuffMsgCache::existedExecutedPrepare(h256 const& blockHash)
         return false;
     }
     return (m_executedPrepareCache->blockHash() == blockHash);
+}
+
+bool HotStuffMsgCache::existedInPrepareQC(h256 const& blockHash)
+{
+    if (!m_prepareQC)
+    {
+        return false;
+    }
+    return (m_prepareQC->blockHash() == blockHash);
 }
 
 bool HotStuffMsgCache::existedLockedQC(h256 const& blockHash)
@@ -150,4 +160,11 @@ VIEWTYPE HotStuffMsgCache::getMaxJustifyView(VIEWTYPE const& curView)
     HOTSTUFFCache_LOG(INFO) << LOG_DESC("obtain maxView from the newViewCache")
                             << LOG_KV("curView", curView) << LOG_KV("maxView", maxView);
     return maxView;
+}
+
+void HotStuffMsgCache::collectCache(dev::eth::BlockHeader const& highestBlockHeader)
+{
+    removeInvalidEntryFromCache(highestBlockHeader, m_prepareCache);
+    removeInvalidEntryFromCache(highestBlockHeader, m_preCommitCache);
+    removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
 }

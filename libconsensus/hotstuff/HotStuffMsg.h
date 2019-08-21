@@ -120,8 +120,14 @@ public:
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         VIEWTYPE const& _justifyView)
     {
+        m_type = _type;
+        m_idx = _idx;
+        m_blockHash = _blockHash;
+        m_blockHeight = _blockHeight;
+        m_view = _view;
         m_justifyView = _justifyView;
-        HotStuffMsg(_keyPair, _type, _idx, _blockHash, _blockHeight, _view);
+        m_timestamp = utcTime();
+        m_patialSig = dev::sign(_keyPair.secret(), calSignatureContent());
     }
 
     virtual ~HotStuffNewViewMsg() {}
@@ -136,7 +142,7 @@ protected:
     void populateFieldsFromRLP(RLP const& rlp) override
     {
         HotStuffMsg::populateFieldsFromRLP(rlp);
-        m_justifyView = rlp[6].toInt<VIEWTYPE>();
+        m_justifyView = rlp[7].toInt<VIEWTYPE>();
     }
 
     h256 calSignatureContent() override
@@ -163,7 +169,8 @@ public:
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         VIEWTYPE const& justifyView);
 
-    HotStuffPrepareMsg(KeyPair const& _keyPair, HotStuffPrepareMsg::Ptr prepareMsg);
+    HotStuffPrepareMsg(KeyPair const& _keyPair, std::shared_ptr<dev::eth::Block> pBlock,
+        HotStuffPrepareMsg::Ptr prepareMsg);
 
     void setBlock(std::shared_ptr<dev::eth::Block> block)
     {

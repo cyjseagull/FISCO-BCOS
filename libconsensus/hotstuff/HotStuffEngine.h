@@ -81,7 +81,9 @@ protected:
 
     virtual bool isValidNewViewMsg(HotStuffMsg::Ptr hotStuffMsg);
     virtual bool handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg);
+    virtual void triggerGeneratePrepare();
 
+    void collectGarbage();
     virtual bool isValidHotStuffMsg(HotStuffMsg::Ptr prepareMsg);
     /// prepare phase
     virtual bool isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg);
@@ -136,10 +138,7 @@ protected:
     virtual bool commitBlock();
 
     // get leader according to view
-    virtual IDXTYPE getLeader(VIEWTYPE const& view) const
-    {
-        return (view + m_highestBlockHeader.number()) % m_nodeNum;
-    }
+    virtual IDXTYPE getLeader(VIEWTYPE const& view) const { return view % m_nodeNum; }
 
     void printHotStuffMsgInfo(
         HotStuffMsg::Ptr msg, std::string const& descMsg, LogLevel const& level = INFO);
