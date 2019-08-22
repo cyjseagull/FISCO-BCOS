@@ -61,11 +61,14 @@ public:
     virtual bool shouldSeal();
 
     // notify HotStuffSealer to generate prepare message
-    void onNotifyGeneratePrepare(std::function<void()> const& _f) { m_canGeneratePrepare = _f; }
+    void onNotifyGeneratePrepare(std::function<void(bool const&)> const& _f)
+    {
+        m_canGeneratePrepare = _f;
+    }
     void reportBlock(dev::eth::Block const&) override;
 
     // get leader according to view
-    virtual IDXTYPE getLeader() const { return getLeader(m_view); }
+    virtual IDXTYPE getLeader() const { return getLeader(m_toView); }
 
     virtual bool reachBlockIntervalTime();
     virtual bool reachMinBlockGenTime();
@@ -78,6 +81,9 @@ public:
     }
 
 protected:
+    // reset view to the highest when receive valid preparePacket from the leader
+    void resetView(VIEWTYPE const& view);
+
     // handle the received message
     void workLoop() override;
 
@@ -191,7 +197,7 @@ protected:
     mutable Mutex m_mutex;
 
     // handlers
-    std::function<void()> m_canGeneratePrepare;
+    std::function<void(bool const&)> m_canGeneratePrepare;
     static const unsigned c_PopWaitSeconds = 5;
 };
 }  // namespace consensus

@@ -73,7 +73,6 @@ void HotStuffSealer::handleBlock()
         m_signalled.notify_all();
         m_blockSignalled.notify_all();
     }
-    m_canBroadCastPrepare = false;
 }
 
 bool HotStuffSealer::reachBlockIntervalTime()

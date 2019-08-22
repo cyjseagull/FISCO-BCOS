@@ -62,37 +62,91 @@ bool HotStuffMsgCache::existedLockedQC(h256 const& blockHash)
     return (m_lockedQC->blockHash() == blockHash);
 }
 
-void HotStuffMsgCache::addRawPrepare(HotStuffMsg::Ptr msg)
+void HotStuffMsgCache::addRawPrepare(HotStuffPrepareMsg::Ptr msg)
 {
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addRawPrepare")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight())
+                             << LOG_KV("txNum", msg->getBlock()->getTransactionSize())
+                             << LOG_KV("view", msg->view()) << LOG_KV("reqIdx", msg->idx());
     m_rawPrepareCache = msg;
 }
 
 void HotStuffMsgCache::addExecutedPrepare(HotStuffPrepareMsg::Ptr msg)
 {
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addExecutedPrepare")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight())
+                             << LOG_KV("txNum", msg->getBlock()->getTransactionSize())
+                             << LOG_KV("view", msg->view()) << LOG_KV("reqIdx", msg->idx());
     m_executedPrepareCache = msg;
 }
 
 void HotStuffMsgCache::addLockedQC(QuorumCert::Ptr msg)
 {
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addLockedQC when receive precommitQC")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("reqIdx", msg->idx());
     m_lockedQC = msg;
 }
 
-void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg)
+void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes)
 {
+    auto cacheSize = getNewViewCacheSize(msg->view());
+    if (cacheSize >= minValidNodes)
+    {
+        return;
+    }
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addNewViewCache")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("cacheSize", (cacheSize + 1))
+                             << LOG_KV("reqIdx", msg->idx());
     return addCache(m_newViewCache, msg, msg->view());
 }
-void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg)
+void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes)
 {
+    auto cacheSize = getPrepareCacheSize(msg->blockHash());
+    if (cacheSize >= minValidNodes)
+    {
+        return;
+    }
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPrepareCache")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("cacheSize", (cacheSize + 1))
+                             << LOG_KV("reqIdx", msg->idx());
     return addCache(m_prepareCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg)
+void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes)
 {
+    auto cacheSize = getPreCommitCacheSize(msg->blockHash());
+    if (cacheSize >= minValidNodes)
+    {
+        return;
+    }
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPreCommitCache")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("cacheSize", (cacheSize + 1))
+                             << LOG_KV("reqIdx", msg->idx());
     return addCache(m_preCommitCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg)
+void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes)
 {
+    auto cacheSize = getCommitCacheSize(msg->blockHash());
+    if (cacheSize >= minValidNodes)
+    {
+        return;
+    }
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addCommitCache")
+                             << LOG_KV("hash", msg->blockHash().abridged())
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("newViewSize", (cacheSize + 1))
+                             << LOG_KV("reqIdx", msg->idx());
     return addCache(m_commitCache, msg, msg->blockHash());
 }
 

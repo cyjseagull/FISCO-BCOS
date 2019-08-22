@@ -45,14 +45,14 @@ public:
     bool existedPrepareMsg(h256 const& blockHash);
 
     // add hotstuff message into the cache
-    void addRawPrepare(HotStuffMsg::Ptr msg);
+    void addRawPrepare(HotStuffPrepareMsg::Ptr msg);
     void addExecutedPrepare(HotStuffPrepareMsg::Ptr msg);
     void addLockedQC(QuorumCert::Ptr msg);
 
-    void addNewViewCache(HotStuffNewViewMsg::Ptr msg);
-    void addPrepareCache(HotStuffMsg::Ptr msg);
-    void addPreCommitCache(HotStuffMsg::Ptr msg);
-    void addCommitCache(HotStuffMsg::Ptr msg);
+    void addNewViewCache(HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes);
+    void addPrepareCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
+    void addPreCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
+    void addCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
 
     // get cache size
     size_t getNewViewCacheSize(VIEWTYPE const& view);
@@ -133,7 +133,7 @@ protected:
 
 private:
     HotStuffPrepareMsg::Ptr m_executedPrepareCache = nullptr;
-    HotStuffMsg::Ptr m_rawPrepareCache = nullptr;
+    HotStuffPrepareMsg::Ptr m_rawPrepareCache = nullptr;
     QuorumCert::Ptr m_lockedQC = nullptr;
     QuorumCert::Ptr m_prepareQC = nullptr;
     std::unordered_map<VIEWTYPE, std::unordered_map<std::string, HotStuffNewViewMsg::Ptr>>

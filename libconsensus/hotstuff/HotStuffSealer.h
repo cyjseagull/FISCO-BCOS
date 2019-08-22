@@ -56,7 +56,8 @@ public:
         m_consensusEngine = m_consensusEngineFactory->createConsensusEngine(_service, _txPool,
             _blockChain, _blockSync, _blockVerifier, _protocolId, _keyPair, _sealerList);
         m_hotStuffEngine = std::dynamic_pointer_cast<HotStuffEngine>(m_consensusEngine);
-        m_hotStuffEngine->onNotifyGeneratePrepare([&]() { m_canBroadCastPrepare = true; });
+        m_hotStuffEngine->onNotifyGeneratePrepare(
+            [&](bool const& canBroadcastPrepare) { m_canBroadCastPrepare = canBroadcastPrepare; });
         return m_hotStuffEngine;
     }
 
