@@ -364,9 +364,11 @@ void HotStuffEngine::triggerGeneratePrepare()
             << LOG_KV("curBlk", m_highestBlockHeader.number()) << LOG_KV("view", m_view)
             << LOG_KV("newViewSize", newViewCacheSize) << LOG_KV("idx", nodeIdx());
         resetView(m_toView);
+        // obtain the max justify view
+        m_justifyView = m_hotStuffMsgCache->getMaxJustifyView(m_toView);
         HOTSTUFFENGINE_LOG(INFO) << LOG_DESC(
                                         "reset view to toView after collect most new-view requests")
-                                 << LOG_KV("updatedView", m_view) << LOG_KV("idx", nodeIdx);
+                                 << LOG_KV("updatedView", m_view) << LOG_KV("idx", nodeIdx());
         m_canGeneratePrepare(true);
     }
 }
@@ -403,14 +405,12 @@ bool HotStuffEngine::omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg)
 void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block> block)
 {
     m_canGeneratePrepare(false);
-    // obtain the max justify view
-    auto justifyView = m_hotStuffMsgCache->getMaxJustifyView(m_toView);
     HotStuffPrepareMsg::Ptr prepareMsg = m_hotStuffMsgFactory->buildHotStuffPrepare(m_keyPair,
-        m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, justifyView);
+        m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, m_justifyView);
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("generateAndBroadcastPrepare")
                              << LOG_KV("rawPrepareHash", block->blockHeader().hash().abridged())
                              << LOG_KV("blockHeight", block->blockHeader().number())
-                             << LOG_KV("justifyView", justifyView) << LOG_KV("view", m_view)
+                             << LOG_KV("justifyView", m_justifyView) << LOG_KV("view", m_view)
                              << LOG_KV("idx", m_idx);
     prepareMsg->setBlock(block);
     broadCastMsg(prepareMsg);
