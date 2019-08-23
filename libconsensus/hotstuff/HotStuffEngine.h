@@ -170,6 +170,8 @@ protected:
 
     virtual bool omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg);
 
+    virtual bool handleFuturePreparePacket();
+
 protected:
     // the highest blockHeader
     dev::eth::BlockHeader m_highestBlockHeader;

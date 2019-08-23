@@ -137,7 +137,14 @@ void HotStuffEngine::workLoop()
                     << LOG_KV("nodeIdx", nodeIdx());
                 handleMsg(ret.second);
             }
+            // wait when there no future prepare cache
+            else if (m_hotStuffMsgCache->getFuturePrepareSize() == 0)
+            {
+                std::unique_lock<std::mutex> l(x_signalled);
+                m_signalled.wait_for(l, std::chrono::milliseconds(5));
+            }
             checkTimeout();
+            handleFuturePreparePacket();
             collectGarbage();
         }
         catch (std::exception& _e)
@@ -577,14 +584,20 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 
 bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 {
+    if (!isValidHotStuffMsg(prepareMsg))
+    {
+        return false;
+    }
+    // try to add the prepareMsg to the future block
+    if (prepareMsg->blockHeight() > m_consensusBlockNumber)
+    {
+        m_hotStuffMsgCache->addFuturePrepare(prepareMsg);
+        return false;
+    }
     if (prepareMsg->getBlock()->blockHeader().parentHash() != m_highestBlockHeader.hash())
     {
         printHotStuffMsgInfo(
             prepareMsg, "InvalidPrepareMsg: inconsistent parent block hash", WARNING);
-        return false;
-    }
-    if (!isValidHotStuffMsg(prepareMsg))
-    {
         return false;
     }
     // check view
@@ -966,4 +979,17 @@ void HotStuffEngine::collectGarbage()
         HOTSTUFFENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                                   << LOG_KV("Timecost", 1000 * t.elapsed());
     }
+}
+
+bool HotStuffEngine::handleFuturePreparePacket()
+{
+    Guard l(m_mutex);
+    auto futurePrepare = m_hotStuffMsgCache->findFuturePrepareMsg(m_consensusBlockNumber);
+    if (!futurePrepare)
+    {
+        return;
+    }
+    printHotStuffMsgInfo(futurePrepare, "handleFuturePreparePacket");
+    handlePrepareMsg(futurePrepare);
+    m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
 }

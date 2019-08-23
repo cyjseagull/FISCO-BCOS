@@ -62,6 +62,16 @@ bool HotStuffMsgCache::existedLockedQC(h256 const& blockHash)
     return (m_lockedQC->blockHash() == blockHash);
 }
 
+HotStuffPrepareMsg::Ptr HotStuffMsgCache::findFuturePrepareMsg(
+    dev::eth::BlockNumber const& blockNumber)
+{
+    if (!m_futurePrepareCache.count(blockNumber))
+    {
+        return nullptr;
+    }
+    return m_futurePrepareCache[blockNumber];
+}
+
 void HotStuffMsgCache::addRawPrepare(HotStuffPrepareMsg::Ptr msg)
 {
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addRawPrepare")
@@ -216,9 +226,45 @@ VIEWTYPE HotStuffMsgCache::getMaxJustifyView(VIEWTYPE const& curView)
     return maxView;
 }
 
+
+void HotStuffMsgCache::addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg)
+{
+    // invalid future prepare message
+    if (m_futurePrepareCache.count(futurePrepareMsg->blockHeight()) != 0)
+    {
+        if (futurePrepareMsg->view() <
+            m_futurePrepareCache[m_futurePrepareCache->blockHeight()]->view())
+        {
+            HOTSTUFFCache_LOG(WARNING)
+                << LOG_DESC("addFuturePrepare: invalid futurePrepareMsg for lower view")
+                << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged)
+                << LOG_KV("reqHeight", futurePrepareMsg->blockHeight())
+                << LOG_KV("reqView", futurePrepareMsg->view())
+                << LOG_KV("reqIdx", futurePrepareMsg->idx());
+            return;
+        }
+    }
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addFuturePrepare")
+                             << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged)
+                             << LOG_KV("reqHeight", futurePrepareMsg->blockHeight())
+                             << LOG_KV("reqView", futurePrepareMsg->view())
+                             << LOG_KV("reqIdx", futurePrepareMsg->idx());
+    // valid future prepare message
+    m_futurePrepareCache[futurePrepareMsg->blockHeight()] = futurePrepareMsg;
+}
+
+void HotStuffMsgCache::eraseFuturePrepare(dev::eth::BlockNumber const& blockNumber)
+{
+    if (m_futurePrepareCache.count(blockNumber))
+    {
+        m_futurePrepareCache.erase(blockNumber);
+    }
+}
+
 void HotStuffMsgCache::collectCache(dev::eth::BlockHeader const& highestBlockHeader)
 {
     removeInvalidEntryFromCache(highestBlockHeader, m_prepareCache);
     removeInvalidEntryFromCache(highestBlockHeader, m_preCommitCache);
     removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
+    removeInvalidFuturePrepare(highestBlockHeader);
 }

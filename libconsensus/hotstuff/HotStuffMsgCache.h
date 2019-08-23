@@ -43,6 +43,9 @@ public:
     bool existedInPrepareQC(h256 const& blockHash);
     bool existedLockedQC(h256 const& blockHash);
     bool existedPrepareMsg(h256 const& blockHash);
+    HotStuffPrepareMsg::Ptr findFuturePrepareMsg(dev::eth::BlockNumber const& blockNumber);
+    void eraseFuturePrepare(dev::eth::BlockNumber const& blockNumber);
+    size_t getFuturePrepareSize() { return m_futurePrepareCache.size(); }
 
     // add hotstuff message into the cache
     void addRawPrepare(HotStuffPrepareMsg::Ptr msg);
@@ -77,6 +80,9 @@ public:
 
     // collect cache periodly
     virtual void collectCache(dev::eth::BlockHeader const& highestBlockHeader);
+
+    // add future prepare
+    virtual void addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg);
 
 protected:
     template <typename T, typename U, typename S>
@@ -131,6 +137,22 @@ protected:
         }
     }
 
+    // remove invalid future prepare
+    void removeInvalidFuturePrepare(dev::eth::BlockHeader const& highestBlockHeader)
+    {
+        for (auto it = m_futurePrepareCache.begin(); it < m_futurePrepareCache.end();)
+        {
+            if (it->second->blockHeight() <= highestBlockHeader.number())
+            {
+                it = it->erase(it);
+            }
+            else
+            {
+                it++;
+            }
+        }
+    }
+
 private:
     HotStuffPrepareMsg::Ptr m_executedPrepareCache = nullptr;
     HotStuffPrepareMsg::Ptr m_rawPrepareCache = nullptr;
@@ -141,6 +163,8 @@ private:
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_prepareCache;
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_preCommitCache;
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_commitCache;
+    // futurePrepare cache
+    std::unordered_map<dev::eth::BlockNumber, HotStuffPrepareMsg::Ptr> m_futurePrepareCache;
 };
 
 }  // namespace consensus
