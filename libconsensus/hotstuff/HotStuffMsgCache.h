@@ -140,11 +140,11 @@ protected:
     // remove invalid future prepare
     void removeInvalidFuturePrepare(dev::eth::BlockHeader const& highestBlockHeader)
     {
-        for (auto it = m_futurePrepareCache.begin(); it < m_futurePrepareCache.end();)
+        for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
         {
             if (it->second->blockHeight() <= highestBlockHeader.number())
             {
-                it = it->erase(it);
+                it = m_futurePrepareCache.erase(it);
             }
             else
             {

@@ -981,7 +981,7 @@ void HotStuffEngine::collectGarbage()
     }
 }
 
-bool HotStuffEngine::handleFuturePreparePacket()
+void HotStuffEngine::handleFuturePreparePacket()
 {
     Guard l(m_mutex);
     auto futurePrepare = m_hotStuffMsgCache->findFuturePrepareMsg(m_consensusBlockNumber);

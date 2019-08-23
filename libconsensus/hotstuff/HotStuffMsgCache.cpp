@@ -233,11 +233,11 @@ void HotStuffMsgCache::addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg
     if (m_futurePrepareCache.count(futurePrepareMsg->blockHeight()) != 0)
     {
         if (futurePrepareMsg->view() <
-            m_futurePrepareCache[m_futurePrepareCache->blockHeight()]->view())
+            m_futurePrepareCache[futurePrepareMsg->blockHeight()]->view())
         {
             HOTSTUFFCache_LOG(WARNING)
                 << LOG_DESC("addFuturePrepare: invalid futurePrepareMsg for lower view")
-                << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged)
+                << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged())
                 << LOG_KV("reqHeight", futurePrepareMsg->blockHeight())
                 << LOG_KV("reqView", futurePrepareMsg->view())
                 << LOG_KV("reqIdx", futurePrepareMsg->idx());
@@ -245,7 +245,7 @@ void HotStuffMsgCache::addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg
         }
     }
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addFuturePrepare")
-                             << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged)
+                             << LOG_KV("reqHash", futurePrepareMsg->blockHash().abridged())
                              << LOG_KV("reqHeight", futurePrepareMsg->blockHeight())
                              << LOG_KV("reqView", futurePrepareMsg->view())
                              << LOG_KV("reqIdx", futurePrepareMsg->idx());
