@@ -274,17 +274,14 @@ void HotStuffEngine::triggerNextView()
 {
     m_toView += 1;
     auto curPrepareQC = m_hotStuffMsgCache->prepareQC();
-    HotStuffNewViewMsg::Ptr newViewMessage = nullptr;
-    if (curPrepareQC)
+    if (!curPrepareQC)
     {
-        newViewMessage = m_hotStuffMsgFactory->buildHotStuffNewViewMsg(m_keyPair, m_idx,
-            curPrepareQC->blockHash(), curPrepareQC->blockHeight(), m_toView, curPrepareQC->view());
+        curPrepareQC =
+            m_hotStuffMsgFactory->buildQuorumCert(m_keyPair, HotStuffPacketType::PrepareQCPacekt,
+                m_idx, m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_view);
     }
-    else
-    {
-        newViewMessage = m_hotStuffMsgFactory->buildHotStuffNewViewMsg(m_keyPair, m_idx,
-            m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_toView, m_view);
-    }
+    auto newViewMessage = m_hotStuffMsgFactory->buildHotStuffNewViewMsg(m_keyPair, m_idx,
+        m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_toView, curPrepareQC);
     HOTSTUFFENGINE_LOG(DEBUG) << LOG_DESC("triggerNextView: send NewViewMessage to the leader")
                               << LOG_KV("reqHash", newViewMessage->blockHash().abridged())
                               << LOG_KV("reqHeight", newViewMessage->blockHeight())
@@ -300,12 +297,15 @@ void HotStuffEngine::triggerNextView()
     sendMessageToLeader(newViewMessage);
 }
 
-bool HotStuffEngine::isValidNewViewMsg(HotStuffMsg::Ptr newViewMsg)
+bool HotStuffEngine::isValidNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
 {
-    // check the view, maybe the future NewViewMsg
-    if (newViewMsg->view() < m_view)
+    if (!isValidHotStuffMsg(newViewMsg))
     {
-        printHotStuffMsgInfo(newViewMsg, "invalid NewViewMsg: lower view of the request", WARNING);
+        return false;
+    }
+    if (newViewMsg->view() <= newViewMsg->justifyQC()->view())
+    {
+        printHotStuffMsgInfo(newViewMsg, "invalid NewViewMsg: lower than prepareQC", WARNING);
         return false;
     }
     // check blockHash
@@ -313,12 +313,6 @@ bool HotStuffEngine::isValidNewViewMsg(HotStuffMsg::Ptr newViewMsg)
         newViewMsg->blockHash() != m_highestBlockHeader.hash())
     {
         printHotStuffMsgInfo(newViewMsg, "invalid NewViewMsg: inconsistent block hash", WARNING);
-        return false;
-    }
-    // check blockNumber
-    if (newViewMsg->blockHeight() < m_highestBlockHeader.number())
-    {
-        printHotStuffMsgInfo(newViewMsg, "invalid NewViewMsg: consensused block", WARNING);
         return false;
     }
     return true;
@@ -372,7 +366,7 @@ void HotStuffEngine::triggerGeneratePrepare()
             << LOG_KV("newViewSize", newViewCacheSize) << LOG_KV("idx", nodeIdx());
         resetView(m_toView);
         // obtain the max justify view
-        m_justifyView = m_hotStuffMsgCache->getMaxJustifyView(m_toView);
+        m_justifyQC = m_hotStuffMsgCache->getHighJustifyQC(m_toView);
         HOTSTUFFENGINE_LOG(INFO) << LOG_DESC(
                                         "reset view to toView after collect most new-view requests")
                                  << LOG_KV("updatedView", m_view) << LOG_KV("idx", nodeIdx());
@@ -413,12 +407,12 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
 {
     m_canGeneratePrepare(false);
     HotStuffPrepareMsg::Ptr prepareMsg = m_hotStuffMsgFactory->buildHotStuffPrepare(m_keyPair,
-        m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, m_justifyView);
+        m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, m_justifyQC);
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("generateAndBroadcastPrepare")
                              << LOG_KV("rawPrepareHash", block->blockHeader().hash().abridged())
                              << LOG_KV("blockHeight", block->blockHeader().number())
-                             << LOG_KV("justifyView", m_justifyView) << LOG_KV("view", m_view)
-                             << LOG_KV("idx", m_idx);
+                             << LOG_KV("justifyView", prepareMsg->justifyView())
+                             << LOG_KV("view", m_view) << LOG_KV("idx", m_idx);
     prepareMsg->setBlock(block);
     broadCastMsg(prepareMsg);
 
@@ -463,13 +457,6 @@ bool HotStuffEngine::handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg)
 {
     if (prepareMsg->type() != HotStuffPacketType::PrepareVotePacket)
     {
-        return false;
-    }
-    // check view
-    if (prepareMsg->view() < m_view)
-    {
-        printHotStuffMsgInfo(
-            prepareMsg, "handlePrepareVoteMsg: invalid prepare-vote msg for illegal view", WARNING);
         return false;
     }
     if (!isValidHotStuffMsg(prepareMsg))
@@ -532,15 +519,24 @@ bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
             hotstuffMsg, "InValid HotStuffMsg: not generated from sealer", WARNING);
         return false;
     }
+    // check block number
     if (hotstuffMsg->blockHeight() < m_highestBlockHeader.number())
     {
         printHotStuffMsgInfo(hotstuffMsg, "InValid HotStuffMsg: has consensused", WARNING);
         return false;
     }
+    // check block hash
     if (hotstuffMsg->blockHeight() == m_highestBlockHeader.number() &&
         hotstuffMsg->blockHash() != m_highestBlockHeader.hash())
     {
         printHotStuffMsgInfo(hotstuffMsg, "InValid HotStuffMsg: inconsistent block hash", WARNING);
+        return false;
+    }
+    // check view
+    if (hotstuffMsg->view() < m_view)
+    {
+        printHotStuffMsgInfo(
+            hotstuffMsg, "InValid HotStuffMsg: lower than the current view", WARNING);
         return false;
     }
     return true;
@@ -584,32 +580,46 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 
 bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 {
-    if (!isValidHotStuffMsg(prepareMsg))
-    {
-        return false;
-    }
-    // try to add the prepareMsg to the future block
-    if (prepareMsg->blockHeight() > m_consensusBlockNumber)
-    {
-        m_hotStuffMsgCache->addFuturePrepare(prepareMsg);
-        return false;
-    }
-    if (prepareMsg->getBlock()->blockHeader().parentHash() != m_highestBlockHeader.hash())
-    {
-        printHotStuffMsgInfo(
-            prepareMsg, "InvalidPrepareMsg: inconsistent parent block hash", WARNING);
-        return false;
-    }
-    // check view
-    if (prepareMsg->view() < m_view)
-    {
-        printHotStuffMsgInfo(prepareMsg, "InvalidPrepareMsg: invalid view", WARNING);
-        return false;
-    }
     // check existence
     if (m_hotStuffMsgCache->existedRawPrepare(prepareMsg->blockHash()))
     {
         printHotStuffMsgInfo(prepareMsg, "InvalidPrepareMsg: already cached", WARNING);
+        return false;
+    }
+    if (!isValidHotStuffMsg(prepareMsg))
+    {
+        return false;
+    }
+    // check leader
+    if (getLeader(prepareMsg->view()) != prepareMsg->idx())
+    {
+        printHotStuffMsgInfo(
+            prepareMsg, "InvalidPrepareMsg: not generated from the leader", WARNING);
+        return false;
+    }
+    auto highQC = prepareMsg->justifyQC();
+    // the view of prepareMsg must be larger than the view of highQC
+    if (prepareMsg->view() <= highQC->view() || prepareMsg->blockHeight() <= highQC->blockHeight())
+    {
+        HOTSTUFFENGINE_LOG(WARNING)
+            << LOG_DESC("invalid view or height")
+            << LOG_KV("prepareHash", prepareMsg->blockHash().abridged())
+            << LOG_KV("prepareView", prepareMsg->view())
+            << LOG_KV("prepareHeight", prepareMsg->blockHeight())
+            << LOG_KV("highQCView", highQC->view()) << LOG_KV("highQCHeight", highQC->blockHeight())
+            << LOG_KV("highQCHash", highQC->blockHash().abridged());
+        return false;
+    }
+    // check the highestQC(the current proposer must be extended from the highQC)
+    if (prepareMsg->getBlock()->blockHeader().parentHash() != highQC->blockHash())
+    {
+        HOTSTUFFENGINE_LOG(WARNING)
+            << LOG_DESC("the current proposer doesn't extend from highQC")
+            << LOG_KV("prepareHash", prepareMsg->blockHash().abridged())
+            << LOG_KV("prepareView", prepareMsg->view())
+            << LOG_KV("prepareHeight", prepareMsg->blockHeight())
+            << LOG_KV("highQCView", highQC->view()) << LOG_KV("highQCHeight", highQC->blockHeight())
+            << LOG_KV("highQCHash", highQC->blockHash().abridged());
         return false;
     }
     // check safeNode, the prepareMsg must be extended from lockedQC
@@ -629,11 +639,16 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
             << LOG_KV("idx", nodeIdx());
         return false;
     }
-    // check leader
-    if (getLeader(prepareMsg->view()) != prepareMsg->idx())
+    // try to add the prepareMsg to the future block
+    if (prepareMsg->view() > m_view || prepareMsg->blockHeight() > m_consensusBlockNumber)
+    {
+        m_hotStuffMsgCache->addFuturePrepare(prepareMsg);
+        return false;
+    }
+    if (prepareMsg->getBlock()->blockHeader().parentHash() != m_highestBlockHeader.hash())
     {
         printHotStuffMsgInfo(
-            prepareMsg, "InvalidPrepareMsg: not generated from the leader", WARNING);
+            prepareMsg, "InvalidPrepareMsg: inconsistent parent block hash", WARNING);
         return false;
     }
     // update the view to the highest

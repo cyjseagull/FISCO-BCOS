@@ -91,7 +91,7 @@ protected:
     void onRecvHotStuffMessage(dev::p2p::NetworkException exception,
         std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message);
 
-    virtual bool isValidNewViewMsg(HotStuffMsg::Ptr hotStuffMsg);
+    virtual bool isValidNewViewMsg(HotStuffNewViewMsg::Ptr hotStuffMsg);
     virtual bool handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg);
     virtual void triggerGeneratePrepare();
 
@@ -179,7 +179,7 @@ protected:
     // current view
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
-    std::atomic<VIEWTYPE> m_justifyView = {0};
+    QuorumCert::Ptr m_justifyQC = nullptr;
     std::atomic<int64_t> m_consensusBlockNumber = {0};
     // commit empty block or not
     std::atomic_bool m_omitEmptyBlock = {true};

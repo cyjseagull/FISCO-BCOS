@@ -76,7 +76,7 @@ public:
 
     QuorumCert::Ptr lockedQC() { return m_lockedQC; }
 
-    VIEWTYPE getMaxJustifyView(VIEWTYPE const& curView);
+    QuorumCert::Ptr getHighJustifyQC(VIEWTYPE const& curView);
 
     // collect cache periodly
     virtual void collectCache(dev::eth::BlockHeader const& highestBlockHeader);

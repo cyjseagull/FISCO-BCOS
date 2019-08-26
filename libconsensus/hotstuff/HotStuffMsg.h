@@ -88,10 +88,11 @@ public:
     // get signature
     Signature const& patialSig() const { return m_patialSig; }
 
+    virtual h256 calSignatureContent();
+
 protected:
     virtual void convertFieldsToRLPStream(RLPStream& _s) const;
     virtual void populateFieldsFromRLP(RLP const& rlp);
-    virtual h256 calSignatureContent();
 
 protected:
     // packet type
@@ -110,6 +111,26 @@ protected:
     Signature m_patialSig = Signature();
 };
 
+// quorum certificate
+class QuorumCert : public HotStuffMsg
+{
+public:
+    QuorumCert() = default;
+
+    QuorumCert(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
+        h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view);
+
+    void setSigList(std::vector<std::pair<IDXTYPE, Signature>> const& _sigs) { m_sigList = _sigs; }
+
+protected:
+    void convertFieldsToRLPStream(RLPStream& _s) const override;
+    void populateFieldsFromRLP(RLP const& rlp) override;
+
+protected:
+    // signatures from (n-f) replias
+    std::vector<std::pair<IDXTYPE, Signature>> m_sigList;
+};
+
 class HotStuffNewViewMsg : public HotStuffMsg
 {
 public:
@@ -118,43 +139,50 @@ public:
     HotStuffNewViewMsg() = default;
     HotStuffNewViewMsg(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
-        VIEWTYPE const& _justifyView)
+        QuorumCert::Ptr _justifyQC)
     {
         m_type = _type;
         m_idx = _idx;
         m_blockHash = _blockHash;
         m_blockHeight = _blockHeight;
         m_view = _view;
-        m_justifyView = _justifyView;
+        m_justifyQC = _justifyQC;
+        // encode the prepareQC
+        m_justifyQC->encode(m_justifyQCData);
         m_timestamp = utcTime();
         m_patialSig = dev::sign(_keyPair.secret(), calSignatureContent());
     }
 
     virtual ~HotStuffNewViewMsg() {}
-    VIEWTYPE const& justifyView() const { return m_justifyView; }
+    QuorumCert::Ptr justifyQC() { return m_justifyQC; }
+    VIEWTYPE const& justifyView() const { return m_justifyQC->view(); }
 
 protected:
     void convertFieldsToRLPStream(RLPStream& _s) const override
     {
         HotStuffMsg::convertFieldsToRLPStream(_s);
-        _s << m_justifyView;
+        _s << m_justifyQCData;
     }
     void populateFieldsFromRLP(RLP const& rlp) override
     {
         HotStuffMsg::populateFieldsFromRLP(rlp);
-        m_justifyView = rlp[7].toInt<VIEWTYPE>();
+        m_justifyQCData = rlp[7].toBytes();
+        // decode intot justifyQC
+        m_justifyQC->decode(ref(m_justifyQCData));
     }
 
     h256 calSignatureContent() override
     {
         RLPStream stream;
+        auto justifyDataHash = m_justifyQC->calSignatureContent();
         stream << m_type << m_view << m_idx << m_blockHash << m_blockHeight << m_timestamp
-               << m_justifyView;
+               << justifyDataHash;
         return dev::sha3(stream.out());
     }
 
 protected:
-    VIEWTYPE m_justifyView;
+    bytes m_justifyQCData;
+    QuorumCert::Ptr m_justifyQC;
 };
 
 /// hotstuff prepare message
@@ -167,7 +195,7 @@ public:
 
     HotStuffPrepareMsg(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
-        VIEWTYPE const& justifyView);
+        QuorumCert::Ptr _justifyQC);
 
     HotStuffPrepareMsg(KeyPair const& _keyPair, std::shared_ptr<dev::eth::Block> pBlock,
         HotStuffPrepareMsg::Ptr prepareMsg);
@@ -193,7 +221,6 @@ public:
     }
 
     dev::blockverifier::ExecutiveContext::Ptr getExecContext() { return m_pExecContext; }
-    VIEWTYPE justifyView() { return m_justifyView; }
 
 protected:
     void convertFieldsToRLPStream(RLPStream& _s) const override;
@@ -206,26 +233,5 @@ protected:
     /// no need to send or receive accross the network
     dev::blockverifier::ExecutiveContext::Ptr m_pExecContext = nullptr;
 };
-
-// quorum certificate
-class QuorumCert : public HotStuffMsg
-{
-public:
-    QuorumCert() = default;
-
-    QuorumCert(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
-        h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view);
-
-    void setSigList(std::vector<std::pair<IDXTYPE, Signature>> const& _sigs) { m_sigList = _sigs; }
-
-protected:
-    void convertFieldsToRLPStream(RLPStream& _s) const override;
-    void populateFieldsFromRLP(RLP const& rlp) override;
-
-protected:
-    // signatures from (n-f) replias
-    std::vector<std::pair<IDXTYPE, Signature>> m_sigList;
-};
-
 }  // namespace consensus
 }  // namespace dev

@@ -43,11 +43,11 @@ public:
 
     virtual HotStuffNewViewMsg::Ptr buildHotStuffNewViewMsg(KeyPair const& keyPair,
         IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
-        VIEWTYPE const& _view, VIEWTYPE const& _justifyView) = 0;
+        VIEWTYPE const& _view, QuorumCert::Ptr _justifyQC) = 0;
 
     virtual HotStuffPrepareMsg::Ptr buildHotStuffPrepare(KeyPair const& keyPair,
         IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
-        VIEWTYPE const& _view, VIEWTYPE const& _justifyView) = 0;
+        VIEWTYPE const& _view, QuorumCert::Ptr _justifyQC) = 0;
 };
 
 class HotStuffMsgFactory : public HotStuffMsgFactoryInterface
@@ -66,20 +66,20 @@ public:
 
     HotStuffPrepareMsg::Ptr buildHotStuffPrepare(KeyPair const& keyPair, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
-        VIEWTYPE const& _justifyView) override
+        QuorumCert::Ptr _justifyQC) override
     {
         int packetType = HotStuffPacketType::PreparePacket;
         return std::make_shared<HotStuffPrepareMsg>(
-            keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyView);
+            keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyQC);
     }
 
     HotStuffNewViewMsg::Ptr buildHotStuffNewViewMsg(KeyPair const& keyPair, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
-        VIEWTYPE const& _justifyView) override
+        QuorumCert::Ptr _justifyQC) override
     {
         int packetType = HotStuffPacketType::NewViewPacket;
         return std::make_shared<HotStuffNewViewMsg>(
-            keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyView);
+            keyPair, packetType, _idx, _blockHash, _blockHeight, _view, _justifyQC);
     }
 
     QuorumCert::Ptr buildQuorumCert(KeyPair const& keyPair, int const& _type, IDXTYPE const& _idx,

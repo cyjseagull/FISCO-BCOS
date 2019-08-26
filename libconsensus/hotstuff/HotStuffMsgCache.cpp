@@ -205,7 +205,7 @@ void HotStuffMsgCache::removeInvalidViewChange(VIEWTYPE const& view)
 }
 
 // get the maximum prepare view
-VIEWTYPE HotStuffMsgCache::getMaxJustifyView(VIEWTYPE const& curView)
+QuorumCert::Ptr HotStuffMsgCache::getHighJustifyQC(VIEWTYPE const& curView)
 {
     if (!m_newViewCache.count(curView))
     {
@@ -213,17 +213,22 @@ VIEWTYPE HotStuffMsgCache::getMaxJustifyView(VIEWTYPE const& curView)
                                         "generate prepare before collect enough NewView message")
                                  << LOG_KV("curView", curView);
     }
+    QuorumCert::Ptr highQC = nullptr;
     VIEWTYPE maxView = 0;
     for (auto const& item : m_newViewCache[curView])
     {
         if (maxView < item.second->justifyView())
         {
             maxView = item.second->justifyView();
+            highQC = item.second->justifyQC();
         }
     }
-    HOTSTUFFCache_LOG(INFO) << LOG_DESC("obtain maxView from the newViewCache")
-                            << LOG_KV("curView", curView) << LOG_KV("maxView", maxView);
-    return maxView;
+    HOTSTUFFCache_LOG(INFO) << LOG_DESC("getHighJustifyQC: get HighQC from the newViewCache")
+                            << LOG_KV("hash", highQC->blockHash().abridged())
+                            << LOG_KV("height", highQC->blockHeight())
+                            << LOG_KV("idx", highQC->idx()) << LOG_KV("view", highQC->view())
+                            << LOG_KV("curView", curView);
+    return highQC;
 }
 
 
