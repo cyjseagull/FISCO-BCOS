@@ -78,7 +78,7 @@ void HotStuffEngine::handleMsg(dev::p2p::P2PMessage::Ptr p2pMessage)
     }
     case HotStuffPacketType::PrepareQCPacket:
     {
-        HotStuffMsg::Ptr prepareQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
+        QuorumCert::Ptr prepareQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
         onReceivePrepareQCMsg(prepareQCMsg);
         break;
     }
@@ -90,7 +90,7 @@ void HotStuffEngine::handleMsg(dev::p2p::P2PMessage::Ptr p2pMessage)
     }
     case HotStuffPacketType::PrecommitQCPacket:
     {
-        HotStuffMsg::Ptr preCommitQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
+        QuorumCert::Ptr preCommitQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
         onReceivePrecommitQCMsg(preCommitQCMsg);
         break;
     }
@@ -102,7 +102,7 @@ void HotStuffEngine::handleMsg(dev::p2p::P2PMessage::Ptr p2pMessage)
     }
     case HotStuffPacketType::CommitQCPacket:
     {
-        HotStuffMsg::Ptr commitQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
+        QuorumCert::Ptr commitQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
         onReceiveCommitQCMsg(commitQCMsg);
         break;
     }
@@ -291,7 +291,7 @@ void HotStuffEngine::triggerNextView()
                               << LOG_KV("view", m_view) << LOG_KV("toView", m_toView)
                               << LOG_KV("justifyView", newViewMessage->justifyView())
                               << LOG_KV("idx", nodeIdx());
-    m_hotStuffMsgCache->addNewViewCache(newViewMessage, minValidNodes());
+    m_hotStuffMsgCache->addNewViewCache(newViewMessage, minValidNodes(), m_idx);
     triggerGeneratePrepare();
     // send New-View message to the leader
     sendMessageToLeader(newViewMessage);
@@ -347,7 +347,7 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
                              << LOG_KV("view", newViewMsg->view())
                              << LOG_KV("justifyView", newViewMsg->justifyView())
                              << LOG_KV("nodeIdx", nodeIdx());
-    m_hotStuffMsgCache->addNewViewCache(newViewMsg, minValidNodes());
+    m_hotStuffMsgCache->addNewViewCache(newViewMsg, minValidNodes(), m_idx);
     triggerGeneratePrepare();
     return true;
 }
@@ -471,7 +471,9 @@ bool HotStuffEngine::handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg)
                               << LOG_KV("reqIdx", prepareMsg->idx())
                               << LOG_KV("reqView", prepareMsg->view()) << LOG_KV("curView", m_view)
                               << LOG_KV("idx", nodeIdx());
-    m_hotStuffMsgCache->addPrepareCache(prepareMsg, minValidNodes());
+    m_hotStuffMsgCache->addPrepareCache(prepareMsg, minValidNodes(), m_idx);
+
+
     checkAndGeneratePrepareQC(prepareMsg);
     return true;
 }
@@ -483,12 +485,12 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
     {
         HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("collect enough vote message and broadcast QCMsg")
                                  << LOG_KV("reqType", voteMsg->type())
-                                 << LOG_KV("reqHash", voteMsg->blockHash())
+                                 << LOG_KV("reqHash", voteMsg->blockHash().abridged())
                                  << LOG_KV("reqHeight", voteMsg->blockHeight())
                                  << LOG_KV("reqView", voteMsg->view())
                                  << LOG_KV("cacheSize", cacheSize) << LOG_KV("view", m_view)
                                  << LOG_KV("idx", nodeIdx());
-        HotStuffMsg::Ptr QCMsg = m_hotStuffMsgFactory->buildQuorumCert(
+        QuorumCert::Ptr QCMsg = m_hotStuffMsgFactory->buildQuorumCert(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
 
         m_hotStuffMsgCache->setSigList(QCMsg);
@@ -573,7 +575,7 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     m_hotStuffMsgCache->addExecutedPrepare(executedPrepare);
 
     // add executed block into the cache
-    m_hotStuffMsgCache->addPrepareCache(executedPrepare, minValidNodes());
+    m_hotStuffMsgCache->addPrepareCache(executedPrepare, minValidNodes(), m_idx);
     printHotStuffMsgInfo(
         executedPrepare, "handlePrepareMsg succ: send executedPrepare to the leader", INFO);
 
@@ -778,7 +780,7 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
         return false;
     }
     printHotStuffMsgInfo(preCommitMsg, "handle pre-commit vote message", INFO);
-    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg, minValidNodes());
+    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg, minValidNodes(), m_idx);
     size_t cachedPrecommitSize =
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash());
     auto lockedQCMsg = checkAndGenerateQC(
@@ -857,7 +859,7 @@ bool HotStuffEngine::handleCommitVoteMsg(HotStuffMsg::Ptr commitMsg)
         return false;
     }
     printHotStuffMsgInfo(commitMsg, "handleCommitVoteMsg: add commit vote to the cache", INFO);
-    m_hotStuffMsgCache->addCommitCache(commitMsg, minValidNodes());
+    m_hotStuffMsgCache->addCommitCache(commitMsg, minValidNodes, m_idx);
     size_t commitMsgSize = m_hotStuffMsgCache->getCommitCacheSize(commitMsg->blockHash());
     if (checkAndGenerateQC(commitMsgSize, commitMsg, HotStuffPacketType::CommitQCPacket))
     {
@@ -902,8 +904,8 @@ bool HotStuffEngine::commitBlock()
         return false;
     }
     // set sigList
-    m_hotStuffMsgCache->executedPrepareCache()->getBlock().setSigList(
-        m_hotStuffMsgCache->lockedQC()->sigList());
+    m_hotStuffMsgCache->executedPrepareCache()->getBlock()->setSigList(
+        m_hotStuffMsgCache->lockedQC()->blockSigList());
 
     CommitResult ret =
         m_blockChain->commitBlock(m_hotStuffMsgCache->executedPrepareCache()->getBlock(),

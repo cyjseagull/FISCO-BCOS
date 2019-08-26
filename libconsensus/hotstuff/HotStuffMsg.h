@@ -119,14 +119,31 @@ protected:
 class QuorumCert : public HotStuffMsg
 {
 public:
+    using Ptr = std::shared_ptr<QuorumCert>;
     QuorumCert() = default;
 
     QuorumCert(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view);
 
-    void setSigList(std::vector<std::pair<IDXTYPE, Signature>> const& _sigs) { m_sigList = _sigs; }
+    void setSigList(std::vector<std::pair<IDXTYPE, Signature>> const& _sigs)
+    {
+        m_sigList = _sigs;
+        m_blockSigList.clear();
+    }
 
     std::vector<std::pair<IDXTYPE, Signature>> const& sigList() { return m_sigList; }
+    std::vector<std::pair<u256, Signature>> const& blockSigList()
+    {
+        if (m_blockSigList.size() > 0)
+        {
+            return m_blockSigList;
+        }
+        for (auto const& sig : m_sigList)
+        {
+            m_blockSigList.push_back(sig);
+        }
+        return m_blockSigList;
+    }
 
 protected:
     void convertFieldsToRLPStream(RLPStream& _s) const override;
@@ -135,6 +152,7 @@ protected:
 protected:
     // signatures from (n-f) replias
     std::vector<std::pair<IDXTYPE, Signature>> m_sigList;
+    std::vector<std::pair<u256, Signature>> m_blockSigList;
 };
 
 class HotStuffNewViewMsg : public HotStuffMsg

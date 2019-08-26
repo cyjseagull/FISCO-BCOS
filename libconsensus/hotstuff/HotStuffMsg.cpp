@@ -132,5 +132,5 @@ void QuorumCert::convertFieldsToRLPStream(RLPStream& _s) const
 void QuorumCert::populateFieldsFromRLP(RLP const& rlp)
 {
     HotStuffMsg::populateFieldsFromRLP(rlp);
-    m_sigList = rlp[7].toVector<std::pair<IDXTYPE, Signature>>();
+    m_sigList = rlp[8].toVector<std::pair<IDXTYPE, Signature>>();
 }

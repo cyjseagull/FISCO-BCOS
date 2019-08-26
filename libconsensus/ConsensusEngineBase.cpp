@@ -231,7 +231,7 @@ bool ConsensusEngineBase::checkSigList(
             return false;
         }
         // check sign
-        if (!dev::verify(nodeId, it.second, blockHash))
+        if (!dev::verify(nodeId, sig.second, blockHash))
         {
             return false;
         }

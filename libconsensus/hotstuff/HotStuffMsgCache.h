@@ -52,10 +52,12 @@ public:
     void addExecutedPrepare(HotStuffPrepareMsg::Ptr msg);
     void addLockedQC(QuorumCert::Ptr msg);
 
-    void addNewViewCache(HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes);
-    void addPrepareCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
-    void addPreCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
-    void addCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes);
+    void addNewViewCache(
+        HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
+    void addPrepareCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
+    void addPreCommitCache(
+        HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
+    void addCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
 
     // get cache size
     size_t getNewViewCacheSize(VIEWTYPE const& view);
@@ -104,7 +106,7 @@ protected:
 
     template <typename T, typename S>
     void getCollectedSigList(
-        std::vector<std::pair<IDXTYPE, Signature>> const& _sigs, T& cache, S const& key)
+        std::vector<std::pair<IDXTYPE, Signature>>& _sigs, T& cache, S const& key)
     {
         if (!cache.count(key))
         {
@@ -112,7 +114,7 @@ protected:
         }
         for (auto const& item : cache[key])
         {
-            _sigs.push_back(item.second->idx(), item.second->blockSig());
+            _sigs.push_back(std::make_pair(item.second->idx(), item.second->blockSig()));
         }
     }
 
