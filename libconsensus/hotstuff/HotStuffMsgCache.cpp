@@ -159,7 +159,7 @@ void HotStuffMsgCache::addPreCommitCache(
 }
 
 void HotStuffMsgCache::addCommitCache(
-    HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const nodeIdx)
+    HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
 {
     if (msg->idx() == nodeIdx)
     {
