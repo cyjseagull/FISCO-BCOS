@@ -126,6 +126,8 @@ public:
 
     void setSigList(std::vector<std::pair<IDXTYPE, Signature>> const& _sigs) { m_sigList = _sigs; }
 
+    std::vector<std::pair<IDXTYPE, Signature>> const& sigList() { return m_sigList; }
+
 protected:
     void convertFieldsToRLPStream(RLPStream& _s) const override;
     void populateFieldsFromRLP(RLP const& rlp) override;

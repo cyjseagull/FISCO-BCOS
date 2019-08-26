@@ -83,6 +83,7 @@ public:
 
     // add future prepare
     virtual void addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg);
+    void setSigList(QuorumCert::Ptr qcMsg);
 
 protected:
     template <typename T, typename U, typename S>
@@ -99,6 +100,20 @@ protected:
             return 0;
         }
         return cache[key].size();
+    }
+
+    template <typename T, typename S>
+    void getCollectedSigList(
+        std::vector<std::pair<IDXTYPE, Signature>> const& _sigs, T& cache, S const& key)
+    {
+        if (!cache.count(key))
+        {
+            return;
+        }
+        for (auto const& item : cache[key])
+        {
+            _sigs.push_back(item.second->idx(), item.second->blockSig());
+        }
     }
 
     template <typename T, typename S>

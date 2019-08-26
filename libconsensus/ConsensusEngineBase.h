@@ -314,6 +314,9 @@ protected:
         return p2pMessage;
     }
 
+    bool checkSigList(
+        std::vector<std::pair<IDXTYPE, Signature>> const& sigList, h256 const& blockHash);
+
 private:
     bool blockExists(h256 const& blockHash)
     {

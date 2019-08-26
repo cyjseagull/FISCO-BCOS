@@ -171,6 +171,24 @@ size_t HotStuffMsgCache::getPrepareCacheSize(h256 const& blockHash)
     return getCollectedMsgSize(m_prepareCache, blockHash);
 }
 
+void HotStuffMsgCache::setSigList(QuorumCert::Ptr qcMsg)
+{
+    std::vector<std::pair<IDXTYPE, Signature>> sigs;
+    if (qcMsg->type() == HotStuffPacketType::PrepareQCPacket)
+    {
+        getCollectedSigList(sigs, m_prepareCache, qcMsg->blockHash());
+    }
+    if (qcMsg->type() == HotStuffPacketType::PrecommitQCPacket)
+    {
+        getCollectedSigList(sigs, m_preCommitCache, qcMsg->blockHash());
+    }
+    if (qcMsg->type == HotStuffPacketType::CommitQCPacket)
+    {
+        getCollectedSigList(sigs, m_commitCache, qcMsg->blockHash());
+    }
+    qcMsg->setSigList(sigs);
+}
+
 size_t HotStuffMsgCache::getPreCommitCacheSize(h256 const& blockHash)
 {
     return getCollectedMsgSize(m_preCommitCache, blockHash);

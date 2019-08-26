@@ -212,5 +212,32 @@ void ConsensusEngineBase::resetConfig()
     m_idx = node_idx;
 }
 
+bool ConsensusEngineBase::checkSigList(
+    std::vector<std::pair<IDXTYPE, Signature>> const& sigList, h256 const& blockHash)
+{
+    if (sigList.size() < minValidNodes())
+    {
+        ENGINE_LOG(WARNING) << LOG_DESC("checkSigList, not enough sigatures")
+                            << LOG_KV("sigSize", sigList.size())
+                            << LOG_KV("requiredSigSize", minValidNodes())
+                            << LOG_KV("idx", nodeIdx());
+        return false;
+    }
+    for (auto const& sig : sigList)
+    {
+        NodeID nodeId;
+        if (!getNodeIDByIndex(nodeId, sig.first))
+        {
+            return false;
+        }
+        // check sign
+        if (!dev::verify(nodeId, it.second, blockHash))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace consensus
 }  // namespace dev

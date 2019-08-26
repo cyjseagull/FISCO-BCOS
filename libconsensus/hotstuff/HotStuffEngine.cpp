@@ -490,6 +490,9 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
                                  << LOG_KV("idx", nodeIdx());
         HotStuffMsg::Ptr QCMsg = m_hotStuffMsgFactory->buildQuorumCert(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
+
+        m_hotStuffMsgCache->setSigList(QCMsg);
+
         // broadcast message to the replias
         broadCastMsg(QCMsg);
         return QCMsg;
@@ -707,7 +710,12 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
         printHotStuffMsgInfo(QCMsg, "invalid QCMsg for not from the leader");
         return false;
     }
-    // TODO: check sigList
+    // check sigList
+    if (!checkSigList(QCMsg->sigList(), QCMsg->blockHash()))
+    {
+        printHotStuffMsgInfo(QCMsg, "verify siglist failed", WARNING);
+        return false;
+    }
     return true;
 }
 
@@ -861,7 +869,7 @@ bool HotStuffEngine::handleCommitVoteMsg(HotStuffMsg::Ptr commitMsg)
 
 bool HotStuffEngine::commitBlock()
 {
-    if (!m_hotStuffMsgCache->executedPrepareCache())
+    if (!m_hotStuffMsgCache->lockedQC())
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("commitBlock Failed: empty executedPrepareCache")
@@ -869,31 +877,33 @@ bool HotStuffEngine::commitBlock()
             << LOG_KV("highestHash", m_highestBlockHeader.number()) << LOG_KV("view", m_view);
         return false;
     }
-    if (m_hotStuffMsgCache->executedPrepareCache()->view() != m_view)
+    // check view
+    if (m_hotStuffMsgCache->lockedQC()->view() != m_view)
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("CommitBlock Failed: invalidView")
-            << LOG_KV("prepView", m_hotStuffMsgCache->executedPrepareCache()->view())
+            << LOG_KV("prepView", m_hotStuffMsgCache->lockedQC()->view())
             << LOG_KV("curView", m_view)
-            << LOG_KV("prepHeight", m_hotStuffMsgCache->executedPrepareCache()->blockHeight())
-            << LOG_KV(
-                   "prepHash", m_hotStuffMsgCache->executedPrepareCache()->blockHash().abridged())
+            << LOG_KV("prepHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
+            << LOG_KV("prepHash", m_hotStuffMsgCache->lockedQC()->blockHash().abridged())
             << LOG_KV("idx", nodeIdx());
         return false;
     }
-    if (m_hotStuffMsgCache->executedPrepareCache()->blockHeight() !=
-        m_highestBlockHeader.number() + 1)
+    // check blockHeight
+    if (m_hotStuffMsgCache->lockedQC()->blockHeight() != m_highestBlockHeader.number() + 1)
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("CommitBlock Failed: invalid height")
             << LOG_KV("highestNum", m_highestBlockHeader.number())
-            << LOG_KV("prepHeight", m_hotStuffMsgCache->executedPrepareCache()->blockHeight())
+            << LOG_KV("prepHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
             << LOG_KV("highestHash", m_highestBlockHeader.number())
-            << LOG_KV(
-                   "prepHash", m_hotStuffMsgCache->executedPrepareCache()->blockHash().abridged())
+            << LOG_KV("prepHash", m_hotStuffMsgCache->lockedQC()->blockHash().abridged())
             << LOG_KV("view", m_view);
         return false;
     }
+    // set sigList
+    m_hotStuffMsgCache->executedPrepareCache()->getBlock().setSigList(
+        m_hotStuffMsgCache->lockedQC()->sigList());
 
     CommitResult ret =
         m_blockChain->commitBlock(m_hotStuffMsgCache->executedPrepareCache()->getBlock(),
