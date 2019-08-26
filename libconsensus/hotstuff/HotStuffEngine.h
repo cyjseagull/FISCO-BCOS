@@ -172,6 +172,8 @@ protected:
 
     virtual void handleFuturePreparePacket();
 
+    bool checkSign(HotStuffMsg::Ptr hotStuffReq) const;
+
 protected:
     // the highest blockHeader
     dev::eth::BlockHeader m_highestBlockHeader;

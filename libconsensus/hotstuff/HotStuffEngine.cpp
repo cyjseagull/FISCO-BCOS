@@ -76,7 +76,7 @@ void HotStuffEngine::handleMsg(dev::p2p::P2PMessage::Ptr p2pMessage)
         handlePrepareVoteMsg(prepareVoteMsg);
         break;
     }
-    case HotStuffPacketType::PrepareQCPacekt:
+    case HotStuffPacketType::PrepareQCPacket:
     {
         HotStuffMsg::Ptr prepareQCMsg = decodeMessageBuffer<QuorumCert>(p2pMessage);
         onReceivePrepareQCMsg(prepareQCMsg);
@@ -276,9 +276,9 @@ void HotStuffEngine::triggerNextView()
     auto curPrepareQC = m_hotStuffMsgCache->prepareQC();
     if (!curPrepareQC)
     {
-        curPrepareQC =
-            m_hotStuffMsgFactory->buildQuorumCert(m_keyPair, HotStuffPacketType::PrepareQCPacekt,
-                m_idx, m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_view);
+        auto packetType = HotStuffPacketType::PrepareQCPacket;
+        curPrepareQC = m_hotStuffMsgFactory->buildQuorumCert(m_keyPair, packetType, m_idx,
+            m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_view);
     }
     auto newViewMessage = m_hotStuffMsgFactory->buildHotStuffNewViewMsg(m_keyPair, m_idx,
         m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_toView, curPrepareQC);
@@ -502,7 +502,7 @@ void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
     // check collect enough prepareMessage or not
     size_t prepareVoteSize = m_hotStuffMsgCache->getPrepareCacheSize(prepareMsg->blockHash());
     auto prepareQCMsg =
-        checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacekt);
+        checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacket);
     if (prepareQCMsg)
     {
         onReceiveQCMsg(prepareQCMsg, HotStuffPacketType::PrecommitVotePacket);
@@ -537,6 +537,12 @@ bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
     {
         printHotStuffMsgInfo(
             hotstuffMsg, "InValid HotStuffMsg: lower than the current view", WARNING);
+        return false;
+    }
+    // check sign
+    if (!checkSign(hotstuffMsg))
+    {
+        printHotStuffMsgInfo(hotstuffMsg, "Invalid HotStuffMsg: invalid signature", WARNING);
         return false;
     }
     return true;
@@ -576,6 +582,19 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     // check the prepareCache
     checkAndGeneratePrepareQC(executedPrepare);
     return true;
+}
+
+// check signauture
+bool HotStuffEngine::checkSign(HotStuffMsg::Ptr hotStuffReq) const
+{
+    NodeID nodeId;
+    // get nodeID
+    if (getNodeIDByIndex(nodeId, hotStuffReq->idx()))
+    {
+        return dev::verify(nodeId, hotStuffReq->blockSig(), hotStuffReq->blockHash()) &&
+               dev::verify(nodeId, hotStuffReq->patialSig(), hotStuffReq->calSignatureContent());
+    }
+    return false;
 }
 
 bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
@@ -640,7 +659,7 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
         return false;
     }
     // try to add the prepareMsg to the future block
-    if (prepareMsg->view() > m_view || prepareMsg->blockHeight() > m_consensusBlockNumber)
+    if (prepareMsg->blockHeight() > m_consensusBlockNumber)
     {
         m_hotStuffMsgCache->addFuturePrepare(prepareMsg);
         return false;
@@ -793,7 +812,7 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
         return true;
     }
     // the node is the leader
-    if (QCMsg->type() == HotStuffPacketType::PrepareQCPacekt)
+    if (QCMsg->type() == HotStuffPacketType::PrepareQCPacket)
     {
         m_hotStuffMsgCache->setPrepareQC(QCMsg);
     }

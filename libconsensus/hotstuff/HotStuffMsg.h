@@ -36,7 +36,7 @@ struct HotStuffPacketType
 
     // pre-commit phase
     static const int PrepareVotePacket = 0x02;
-    static const int PrepareQCPacekt = 0x03;
+    static const int PrepareQCPacket = 0x03;
 
     // commit phase
     static const int PrecommitVotePacket = 0x04;
@@ -87,6 +87,8 @@ public:
     uint64_t const& timestamp() const { return m_timestamp; }
     // get signature
     Signature const& patialSig() const { return m_patialSig; }
+    // get block signature
+    Signature const& blockSig() const { return m_blockSig; }
 
     virtual h256 calSignatureContent();
 
@@ -109,6 +111,8 @@ protected:
     uint64_t m_timestamp = INT64_MAX;
     // signature to this message
     Signature m_patialSig = Signature();
+    // signature to blockHash
+    Signature m_blockSig = Signature();
 };
 
 // quorum certificate
@@ -136,7 +140,7 @@ class HotStuffNewViewMsg : public HotStuffMsg
 public:
     using Ptr = std::shared_ptr<HotStuffNewViewMsg>;
 
-    HotStuffNewViewMsg() = default;
+    HotStuffNewViewMsg() { m_justifyQC = std::make_shared<QuorumCert>(); }
     HotStuffNewViewMsg(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         QuorumCert::Ptr _justifyQC)
@@ -166,8 +170,8 @@ protected:
     void populateFieldsFromRLP(RLP const& rlp) override
     {
         HotStuffMsg::populateFieldsFromRLP(rlp);
-        m_justifyQCData = rlp[7].toBytes();
-        // decode intot justifyQC
+        m_justifyQCData = rlp[8].toBytes();
+        // decode into justifyQC
         m_justifyQC->decode(ref(m_justifyQCData));
     }
 

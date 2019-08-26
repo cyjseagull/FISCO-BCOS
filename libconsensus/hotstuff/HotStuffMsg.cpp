@@ -32,6 +32,7 @@ HotStuffMsg::HotStuffMsg(KeyPair const& keyPair, int const& _type, IDXTYPE const
   : m_type(_type), m_idx(_idx), m_blockHash(_blockHash), m_blockHeight(_blockHeight), m_view(_view)
 {
     m_timestamp = utcTime();
+    m_blockSig = dev::sign(keyPair.secret(), _blockHash);
     m_patialSig = dev::sign(keyPair.secret(), calSignatureContent());
 }
 
@@ -64,7 +65,7 @@ h256 HotStuffMsg::calSignatureContent()
 void HotStuffMsg::convertFieldsToRLPStream(RLPStream& _s) const
 {
     _s << m_type << m_view << m_idx << m_blockHash << m_blockHeight << m_timestamp
-       << m_patialSig.asBytes();
+       << m_blockSig.asBytes() << m_patialSig.asBytes();
 }
 
 // populate members from the given RLP
@@ -79,7 +80,8 @@ void HotStuffMsg::populateFieldsFromRLP(RLP const& rlp)
         m_blockHash = rlp[field = 3].toHash<h256>(RLP::VeryStrict);
         m_blockHeight = rlp[field = 4].toInt<dev::eth::BlockNumber>();
         m_timestamp = rlp[field = 5].toInt<uint64_t>();
-        m_patialSig = Signature(rlp[field = 6].toBytesConstRef());
+        m_blockSig = Signature(rlp[field = 6].toBytesConstRef());
+        m_patialSig = Signature(rlp[field = 7].toBytesConstRef());
     }
     catch (Exception const& e)
     {
@@ -91,15 +93,15 @@ void HotStuffMsg::populateFieldsFromRLP(RLP const& rlp)
 
 HotStuffPrepareMsg::HotStuffPrepareMsg(KeyPair const& _keyPair, int const& _type,
     IDXTYPE const& _idx, h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight,
-    VIEWTYPE const& _view, VIEWTYPE const& justifyView)
-  : HotStuffNewViewMsg(_keyPair, _type, _idx, _blockHash, _blockHeight, _view, justifyView)
+    VIEWTYPE const& _view, QuorumCert::Ptr _justifyQC)
+  : HotStuffNewViewMsg(_keyPair, _type, _idx, _blockHash, _blockHeight, _view, _justifyQC)
 {}
 
 HotStuffPrepareMsg::HotStuffPrepareMsg(KeyPair const& _keyPair,
     std::shared_ptr<dev::eth::Block> pBlock, HotStuffPrepareMsg::Ptr prepareMsg)
   : HotStuffNewViewMsg(_keyPair, prepareMsg->type(), prepareMsg->idx(),
         pBlock->blockHeader().hash(), pBlock->blockHeader().number(), prepareMsg->view(),
-        prepareMsg->justifyView())
+        prepareMsg->justifyQC())
 {
     setBlock(pBlock);
 }
@@ -113,7 +115,7 @@ void HotStuffPrepareMsg::convertFieldsToRLPStream(RLPStream& _s) const
 void HotStuffPrepareMsg::populateFieldsFromRLP(RLP const& rlp)
 {
     HotStuffNewViewMsg::populateFieldsFromRLP(rlp);
-    m_blockData = rlp[8].toBytes();
+    m_blockData = rlp[9].toBytes();
 }
 
 QuorumCert::QuorumCert(KeyPair const& _keyPair, int const& _type, IDXTYPE const& _idx,
@@ -130,5 +132,5 @@ void QuorumCert::convertFieldsToRLPStream(RLPStream& _s) const
 void QuorumCert::populateFieldsFromRLP(RLP const& rlp)
 {
     HotStuffMsg::populateFieldsFromRLP(rlp);
-    m_sigList = rlp[6].toVector<std::pair<IDXTYPE, Signature>>();
+    m_sigList = rlp[7].toVector<std::pair<IDXTYPE, Signature>>();
 }

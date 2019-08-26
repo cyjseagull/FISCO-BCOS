@@ -217,7 +217,7 @@ QuorumCert::Ptr HotStuffMsgCache::getHighJustifyQC(VIEWTYPE const& curView)
     VIEWTYPE maxView = 0;
     for (auto const& item : m_newViewCache[curView])
     {
-        if (maxView < item.second->justifyView())
+        if (maxView == 0 || maxView < item.second->justifyView())
         {
             maxView = item.second->justifyView();
             highQC = item.second->justifyQC();
