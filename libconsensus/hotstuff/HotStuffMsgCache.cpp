@@ -104,9 +104,9 @@ void HotStuffMsgCache::addLockedQC(QuorumCert::Ptr msg)
 void HotStuffMsgCache::addNewViewCache(
     HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
 {
+    auto cacheSize = getNewViewCacheSize(msg->view());
     if (msg->idx() == nodeIdx)
     {
-        auto cacheSize = getNewViewCacheSize(msg->view());
         if (cacheSize >= minValidNodes)
         {
             return;
@@ -123,9 +123,9 @@ void HotStuffMsgCache::addNewViewCache(
 void HotStuffMsgCache::addPrepareCache(
     HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
 {
+    auto cacheSize = getPrepareCacheSize(msg->blockHash());
     if (msg->idx() == nodeIdx)
     {
-        auto cacheSize = getPrepareCacheSize(msg->blockHash());
         if (cacheSize >= minValidNodes)
         {
             return;
@@ -142,9 +142,9 @@ void HotStuffMsgCache::addPrepareCache(
 void HotStuffMsgCache::addPreCommitCache(
     HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
 {
+    auto cacheSize = getPreCommitCacheSize(msg->blockHash());
     if (msg->idx() == nodeIdx)
     {
-        auto cacheSize = getPreCommitCacheSize(msg->blockHash());
         if (cacheSize >= minValidNodes)
         {
             return;
@@ -161,9 +161,9 @@ void HotStuffMsgCache::addPreCommitCache(
 void HotStuffMsgCache::addCommitCache(
     HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
 {
+    auto cacheSize = getCommitCacheSize(msg->blockHash());
     if (msg->idx() == nodeIdx)
     {
-        auto cacheSize = getCommitCacheSize(msg->blockHash());
         if (cacheSize >= minValidNodes)
         {
             return;

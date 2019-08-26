@@ -859,7 +859,7 @@ bool HotStuffEngine::handleCommitVoteMsg(HotStuffMsg::Ptr commitMsg)
         return false;
     }
     printHotStuffMsgInfo(commitMsg, "handleCommitVoteMsg: add commit vote to the cache", INFO);
-    m_hotStuffMsgCache->addCommitCache(commitMsg, minValidNodes, m_idx);
+    m_hotStuffMsgCache->addCommitCache(commitMsg, minValidNodes(), m_idx);
     size_t commitMsgSize = m_hotStuffMsgCache->getCommitCacheSize(commitMsg->blockHash());
     if (checkAndGenerateQC(commitMsgSize, commitMsg, HotStuffPacketType::CommitQCPacket))
     {
