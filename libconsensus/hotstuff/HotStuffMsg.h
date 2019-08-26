@@ -155,6 +155,7 @@ public:
         m_justifyQC->encode(m_justifyQCData);
         m_timestamp = utcTime();
         m_patialSig = dev::sign(_keyPair.secret(), calSignatureContent());
+        m_blockSig = dev::sign(_keyPair.secret(), _blockHash);
     }
 
     virtual ~HotStuffNewViewMsg() {}
