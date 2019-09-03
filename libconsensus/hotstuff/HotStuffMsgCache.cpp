@@ -76,9 +76,8 @@ void HotStuffMsgCache::addRawPrepare(HotStuffPrepareMsg::Ptr msg)
 {
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addRawPrepare")
                              << LOG_KV("hash", msg->blockHash().abridged())
-                             << LOG_KV("height", msg->blockHeight())
-                             << LOG_KV("txNum", msg->getBlock()->getTransactionSize())
-                             << LOG_KV("view", msg->view()) << LOG_KV("reqIdx", msg->idx());
+                             << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
+                             << LOG_KV("reqIdx", msg->idx());
     m_rawPrepareCache = msg;
 }
 
@@ -101,14 +100,14 @@ void HotStuffMsgCache::addLockedQC(QuorumCert::Ptr msg)
     m_lockedQC = msg;
 }
 
-void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg)
 {
     auto cacheSize = getNewViewCacheSize(msg->view());
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addNewViewCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
                              << LOG_KV("cacheSize", (cacheSize)) << LOG_KV("reqIdx", msg->idx());
-    m_newViewCache[msg->view()][nodeIdx] = msg;
+    m_newViewCache[msg->view()][msg->idx()] = msg;
 }
 
 void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg)

@@ -293,7 +293,7 @@ void HotStuffEngine::triggerNextView()
                               << LOG_KV("view", m_view) << LOG_KV("toView", m_toView)
                               << LOG_KV("justifyView", newViewMessage->justifyView())
                               << LOG_KV("idx", nodeIdx());
-    m_hotStuffMsgCache->addNewViewCache(newViewMessage, m_idx);
+    m_hotStuffMsgCache->addNewViewCache(newViewMessage);
     if (newViewMessage->blockHeight() == m_highestBlockHeader.number())
     {
         triggerGeneratePrepare();
@@ -360,7 +360,7 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
                              << LOG_KV("nodeIdx", nodeIdx());
     if (m_hotStuffMsgCache->getNewViewCacheSize(newViewMsg->view()) < (size_t)(minValidNodes() - 1))
     {
-        m_hotStuffMsgCache->addNewViewCache(newViewMsg, m_idx);
+        m_hotStuffMsgCache->addNewViewCache(newViewMsg);
         if (newViewMsg->blockHeight() == m_highestBlockHeader.number())
         {
             triggerGeneratePrepare();
@@ -447,12 +447,31 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
     // the block already has been decoded
     if (rawPrepareMsg->getBlock())
     {
-        executeSealing->block = rawPrepareMsg->getBlock();
+        executeSealing->block =
+            std::make_shared<dev::eth::Block>(std::move(*rawPrepareMsg->getBlock()));
     }
     else
     {
         executeSealing->block->decode(
             ref(rawPrepareMsg->blockData()), dev::eth::CheckTransaction::None, false, true);
+    }
+
+    // check safeNode, the prepareMsg must be extended from lockedQC
+    auto curLockedQC = m_hotStuffMsgCache->lockedQC();
+    if (curLockedQC &&
+        executeSealing->block->blockHeader().parentHash() != curLockedQC->blockHash() &&
+        rawPrepareMsg->justifyView() <= curLockedQC->view())
+    {
+        HOTSTUFFENGINE_LOG(WARNING) << LOG_DESC("InvalidPrepareMsg: safeNode check failed")
+                                    << LOG_KV("reqHash", rawPrepareMsg->blockHash().abridged())
+                                    << LOG_KV("reqIdx", rawPrepareMsg->idx())
+                                    << LOG_KV("reqHeight", rawPrepareMsg->blockHeight())
+                                    << LOG_KV("justifyView", rawPrepareMsg->justifyView())
+                                    << LOG_KV("curBlk", m_highestBlockHeader.number())
+                                    << LOG_KV("lockedQCHash", curLockedQC->blockHash().abridged())
+                                    << LOG_KV("lockedQCView", curLockedQC->view())
+                                    << LOG_KV("curView", m_view) << LOG_KV("idx", nodeIdx());
+        BOOST_THROW_EXCEPTION(SafteNodeCheckFailed() << errinfo_comment("safeNode check failed"));
     }
     checkBlockValid(*executeSealing->block);
     // set sender for prepareMsg
@@ -667,40 +686,16 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
             << LOG_KV("highQCHash", highQC->blockHash().abridged()) << LOG_KV("idx", nodeIdx());
         return false;
     }
-    // check safeNode, the prepareMsg must be extended from lockedQC
-    auto curLockedQC = m_hotStuffMsgCache->lockedQC();
-    if (curLockedQC &&
-        prepareMsg->getBlock()->blockHeader().parentHash() != curLockedQC->blockHash() &&
-        prepareMsg->justifyView() <= curLockedQC->view())
-    {
-        HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("InvalidPrepareMsg: safeNode check failed")
-            << LOG_KV("reqHash", prepareMsg->blockHash().abridged())
-            << LOG_KV("reqIdx", prepareMsg->idx()) << LOG_KV("reqHeight", prepareMsg->blockHeight())
-            << LOG_KV("justifyView", prepareMsg->justifyView())
-            << LOG_KV("curBlk", m_highestBlockHeader.number())
-            << LOG_KV("lockedQCHash", curLockedQC->blockHash().abridged())
-            << LOG_KV("lockedQCView", curLockedQC->view()) << LOG_KV("curView", m_view)
-            << LOG_KV("idx", nodeIdx());
-        return false;
-    }
     // try to add the prepareMsg to the future block
     if (prepareMsg->blockHeight() > m_consensusBlockNumber)
     {
         m_hotStuffMsgCache->addFuturePrepare(prepareMsg);
         return false;
     }
-    if (prepareMsg->getBlock()->blockHeader().parentHash() != m_highestBlockHeader.hash())
-    {
-        printHotStuffMsgInfo(
-            prepareMsg, "InvalidPrepareMsg: inconsistent parent block hash", WARNING);
-        return false;
-    }
     // update the view to the highest
     resetView(prepareMsg->view());
     return true;
 }
-
 
 void HotStuffEngine::resetView(VIEWTYPE const& view)
 {
@@ -805,7 +800,7 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
         return false;
     }
     printHotStuffMsgInfo(preCommitMsg, "handle pre-commit vote message", INFO);
-    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg, m_idx);
+    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg);
     size_t cachedPrecommitSize =
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash());
     auto lockedQCMsg = checkAndGenerateQC(
