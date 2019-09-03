@@ -111,7 +111,7 @@ void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg, IDXTYPE cons
     m_newViewCache[msg->view()][nodeIdx] = msg;
 }
 
-void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg)
 {
     auto cacheSize = getPrepareCacheSize(msg->blockHash());
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPrepareCache")
@@ -122,7 +122,7 @@ void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg, IDXTYPE const& node
     return addCache(m_prepareCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg)
 {
     auto cacheSize = getPreCommitCacheSize(msg->blockHash());
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPreCommitCache")
@@ -133,7 +133,7 @@ void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& no
     return addCache(m_preCommitCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg)
 {
     auto cacheSize = getCommitCacheSize(msg->blockHash());
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addCommitCache")

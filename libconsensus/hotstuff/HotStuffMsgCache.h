@@ -56,9 +56,9 @@ public:
     QuorumCert::Ptr commitQC() { return m_commitQC; }
 
     void addNewViewCache(HotStuffNewViewMsg::Ptr msg, IDXTYPE const& nodeIdx);
-    void addPrepareCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
-    void addPreCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
-    void addCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
+    void addPrepareCache(HotStuffMsg::Ptr msg);
+    void addPreCommitCache(HotStuffMsg::Ptr msg);
+    void addCommitCache(HotStuffMsg::Ptr msg);
 
     // get cache size
     size_t getNewViewCacheSize(VIEWTYPE const& view);
