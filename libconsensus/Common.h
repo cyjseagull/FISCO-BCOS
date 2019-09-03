@@ -54,6 +54,7 @@ enum NodeAccountType
 };
 struct Sealing
 {
+    using Ptr = std::shared_ptr<Sealing>;
     Sealing(std::shared_ptr<dev::eth::BlockFactory> blockFactory) : m_blockFactory(blockFactory)
     {
         block = m_blockFactory->newBlock();

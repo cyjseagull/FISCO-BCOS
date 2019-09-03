@@ -51,13 +51,14 @@ public:
     void addRawPrepare(HotStuffPrepareMsg::Ptr msg);
     void addExecutedPrepare(HotStuffPrepareMsg::Ptr msg);
     void addLockedQC(QuorumCert::Ptr msg);
+    void addCommitQC(QuorumCert::Ptr msg) { m_commitQC = msg; }
 
-    void addNewViewCache(
-        HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
-    void addPrepareCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
-    void addPreCommitCache(
-        HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
-    void addCommitCache(HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx);
+    QuorumCert::Ptr commitQC() { return m_commitQC; }
+
+    void addNewViewCache(HotStuffNewViewMsg::Ptr msg, IDXTYPE const& nodeIdx);
+    void addPrepareCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
+    void addPreCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
+    void addCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx);
 
     // get cache size
     size_t getNewViewCacheSize(VIEWTYPE const& view);
@@ -86,6 +87,28 @@ public:
     // add future prepare
     virtual void addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg);
     void setSigList(QuorumCert::Ptr qcMsg);
+
+    void clearPrepareCache(h256 const& blockHash) { clearCache(m_prepareCache, blockHash); }
+    void clearPreCommitCache(h256 const& blockHash) { clearCache(m_preCommitCache, blockHash); }
+
+    void clearCommitCache(h256 const& blockHash) { clearCache(m_commitCache, blockHash); }
+    void clearNextViewCache(VIEWTYPE const& view) { clearCache(m_newViewCache, view); }
+
+    void addFutureQC(QuorumCert::Ptr qcMsg);
+    QuorumCert::Ptr getFutureQCMsg(int msgType, h256 const& blockHash);
+
+    void eraseFutureQCMsg(int msgType, h256 const& blockHash)
+    {
+        if (!m_futureQCCache.count(msgType))
+        {
+            return;
+        }
+        if (!m_futureQCCache[msgType].count(blockHash))
+        {
+            return;
+        }
+        m_futureQCCache[msgType].erase(blockHash);
+    }
 
 protected:
     template <typename T, typename U, typename S>
@@ -175,13 +198,19 @@ private:
     HotStuffPrepareMsg::Ptr m_rawPrepareCache = nullptr;
     QuorumCert::Ptr m_lockedQC = nullptr;
     QuorumCert::Ptr m_prepareQC = nullptr;
-    std::unordered_map<VIEWTYPE, std::unordered_map<std::string, HotStuffNewViewMsg::Ptr>>
+    QuorumCert::Ptr m_commitQC = nullptr;
+
+
+    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, HotStuffNewViewMsg::Ptr>>
         m_newViewCache;
+
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_prepareCache;
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_preCommitCache;
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_commitCache;
     // futurePrepare cache
     std::unordered_map<dev::eth::BlockNumber, HotStuffPrepareMsg::Ptr> m_futurePrepareCache;
+    // future QC cache
+    std::unordered_map<int, std::unordered_map<h256, QuorumCert::Ptr>> m_futureQCCache;
 };
 
 }  // namespace consensus

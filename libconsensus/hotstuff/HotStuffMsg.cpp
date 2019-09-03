@@ -97,14 +97,14 @@ HotStuffPrepareMsg::HotStuffPrepareMsg(KeyPair const& _keyPair, int const& _type
   : HotStuffNewViewMsg(_keyPair, _type, _idx, _blockHash, _blockHeight, _view, _justifyQC)
 {}
 
-HotStuffPrepareMsg::HotStuffPrepareMsg(KeyPair const& _keyPair,
-    std::shared_ptr<dev::eth::Block> pBlock, HotStuffPrepareMsg::Ptr prepareMsg)
+HotStuffPrepareMsg::HotStuffPrepareMsg(
+    KeyPair const& _keyPair, Sealing::Ptr sealing, HotStuffPrepareMsg::Ptr prepareMsg)
   : HotStuffNewViewMsg(_keyPair, prepareMsg->type(), prepareMsg->idx(),
-        pBlock->blockHeader().hash(), pBlock->blockHeader().number(), prepareMsg->view(),
-        prepareMsg->justifyQC())
-{
-    setBlock(pBlock);
-}
+        sealing->block->blockHeader().hash(), sealing->block->blockHeader().number(),
+        prepareMsg->view(), prepareMsg->justifyQC()),
+    m_pBlock(sealing->block),
+    m_pExecContext(sealing->p_execContext)
+{}
 
 void HotStuffPrepareMsg::convertFieldsToRLPStream(RLPStream& _s) const
 {

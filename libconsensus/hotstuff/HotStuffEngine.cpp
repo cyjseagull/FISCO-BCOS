@@ -41,6 +41,8 @@ void HotStuffEngine::initHotStuff()
     m_timeManager = std::make_shared<TimeManager>();
     // init the timeout
     m_timeManager->initTimerManager(3 * m_timeManager->m_emptyBlockGenTime);
+    reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
+    resetConfig();
 }
 
 // start the hotstuff engine thread
@@ -246,7 +248,7 @@ void HotStuffEngine::printHotStuffMsgInfo(
                               << LOG_KV("consensusBlockNumber", m_consensusBlockNumber)
                               << LOG_KV("curView", m_view) << LOG_KV("curToView", m_toView)
                               << LOG_KV("msgLeader", getLeader(msg->view()))
-                              << LOG_KV("curLeadder", getLeader()) << LOG_KV("idx", nodeIdx());
+                              << LOG_KV("curLeader", getLeader()) << LOG_KV("idx", nodeIdx());
 }
 
 // send message to the leader of given view
@@ -291,8 +293,11 @@ void HotStuffEngine::triggerNextView()
                               << LOG_KV("view", m_view) << LOG_KV("toView", m_toView)
                               << LOG_KV("justifyView", newViewMessage->justifyView())
                               << LOG_KV("idx", nodeIdx());
-    m_hotStuffMsgCache->addNewViewCache(newViewMessage, minValidNodes(), m_idx);
-    triggerGeneratePrepare();
+    m_hotStuffMsgCache->addNewViewCache(newViewMessage, m_idx);
+    if (newViewMessage->blockHeight() == m_highestBlockHeader.number())
+    {
+        triggerGeneratePrepare();
+    }
     // send New-View message to the leader
     sendMessageToLeader(newViewMessage);
 }
@@ -301,6 +306,12 @@ bool HotStuffEngine::isValidNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
 {
     if (!isValidHotStuffMsg(newViewMsg))
     {
+        return false;
+    }
+    if (newViewMsg->view() <= m_view)
+    {
+        printHotStuffMsgInfo(
+            newViewMsg, "invalid NewViewMsg: lower than the current view", WARNING);
         return false;
     }
     if (newViewMsg->view() <= newViewMsg->justifyQC()->view())
@@ -326,7 +337,7 @@ bool HotStuffEngine::shouldSeal()
         return false;
     }
     // check Leader
-    if (getLeader(m_view) != m_idx)
+    if (getLeader() != m_idx)
     {
         return false;
     }
@@ -347,8 +358,14 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
                              << LOG_KV("view", newViewMsg->view())
                              << LOG_KV("justifyView", newViewMsg->justifyView())
                              << LOG_KV("nodeIdx", nodeIdx());
-    m_hotStuffMsgCache->addNewViewCache(newViewMsg, minValidNodes(), m_idx);
-    triggerGeneratePrepare();
+    if (m_hotStuffMsgCache->getNewViewCacheSize(newViewMsg->view()) < (minValidNodes() - 1))
+    {
+        m_hotStuffMsgCache->addNewViewCache(newViewMsg, m_idx);
+        if (newViewMsg->blockHeight == m_highestBlockHeader.number())
+        {
+            triggerGeneratePrepare();
+        }
+    }
     return true;
 }
 
@@ -356,7 +373,7 @@ void HotStuffEngine::triggerGeneratePrepare()
 {
     // collect enough new-view message, notify PBFTSealer to generate the prepare message
     auto newViewCacheSize = m_hotStuffMsgCache->getNewViewCacheSize(m_toView);
-    if (newViewCacheSize == minValidNodes())
+    if (newViewCacheSize >= minValidNodes())
     {
         HOTSTUFFENGINE_LOG(INFO)
             << LOG_DESC(
@@ -419,22 +436,31 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
     Guard l(m_mutex);
     // handle the prepareMsg
     handlePrepareMsg(prepareMsg);
+    // clear the new view cache
+    m_hotStuffMsgCache->removeInvalidViewChange(m_view);
 }
 
 HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPrepareMsg)
 {
     auto startT = utcTime();
-    checkBlockValid(*rawPrepareMsg->getBlock());
-    std::shared_ptr<dev::eth::Block> pBlock =
-        std::make_shared<dev::eth::Block>(*rawPrepareMsg->getBlock());
-
+    std::shared_ptr<Sealing> executeSealing = std::make_shared<Sealing>();
+    // the block already has been decoded
+    if (rawPrepareMsg->getBlock())
+    {
+        executeSealing->block = rawPrepareMsg->getBlock();
+    }
+    else
+    {
+        executeSealing->block->decode(
+            ref(rawPrepareMsg->blockData()), dev::eth::CheckTransaction::None, false, true);
+    }
+    checkBlockValid(*executeSealing->block);
     // set sender for prepareMsg
-    m_txPool->verifyAndSetSenderForBlock(*pBlock);
+    m_txPool->verifyAndSetSenderForBlock(*executeSealing->block);
     // executeBlock
-    auto pexecContext = executeBlock(pBlock);
+    executeSealing->p_execContext = executeBlock(executeSealing->block);
     HotStuffPrepareMsg::Ptr executedPrepare =
-        std::make_shared<HotStuffPrepareMsg>(m_keyPair, pBlock, rawPrepareMsg);
-    executedPrepare->setExecResult(pexecContext);
+        std::make_shared<HotStuffPrepareMsg>(m_keyPair, executeSealing, rawPrepareMsg);
     auto execTime = utcTime() - startT;
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("execBlock")
                              << LOG_KV("rawPrepareHash", rawPrepareMsg->blockHash())
@@ -444,6 +470,7 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
                                     "transNum", executedPrepare->getBlock()->getTransactionSize())
                              << LOG_KV("reqIdx", executedPrepare->idx())
                              << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("execTime", execTime);
+    m_timeManager->m_lastSignTime = utcTime();
     return executedPrepare;
 }
 
@@ -471,7 +498,7 @@ bool HotStuffEngine::handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg)
                               << LOG_KV("reqIdx", prepareMsg->idx())
                               << LOG_KV("reqView", prepareMsg->view()) << LOG_KV("curView", m_view)
                               << LOG_KV("idx", nodeIdx());
-    m_hotStuffMsgCache->addPrepareCache(prepareMsg, minValidNodes(), m_idx);
+    m_hotStuffMsgCache->addPrepareCache(prepareMsg, m_idx);
 
 
     checkAndGeneratePrepareQC(prepareMsg);
@@ -481,7 +508,7 @@ bool HotStuffEngine::handlePrepareVoteMsg(HotStuffMsg::Ptr prepareMsg)
 QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
     size_t const& cacheSize, HotStuffMsg::Ptr voteMsg, int const packetType)
 {
-    if (cacheSize == minValidNodes())
+    if (cacheSize >= minValidNodes())
     {
         HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("collect enough vote message and broadcast QCMsg")
                                  << LOG_KV("reqType", voteMsg->type())
@@ -494,7 +521,6 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
 
         m_hotStuffMsgCache->setSigList(QCMsg);
-
         // broadcast message to the replias
         broadCastMsg(QCMsg);
         return QCMsg;
@@ -510,6 +536,7 @@ void HotStuffEngine::checkAndGeneratePrepareQC(HotStuffMsg::Ptr prepareMsg)
         checkAndGenerateQC(prepareVoteSize, prepareMsg, HotStuffPacketType::PrepareQCPacket);
     if (prepareQCMsg)
     {
+        m_hotStuffMsgCache->clearPrepareCache(prepareMsg->blockHash());
         onReceiveQCMsg(prepareQCMsg, HotStuffPacketType::PrecommitVotePacket);
     }
 }
@@ -567,6 +594,7 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     {
         return false;
     }
+    m_timeManager->m_lastSignTime = utcTime();
     printHotStuffMsgInfo(prepareMsg, "handlePrepareMsg and addRawPrepare", INFO);
     // cache the rawprepare received from leader
     m_hotStuffMsgCache->addRawPrepare(prepareMsg);
@@ -575,7 +603,7 @@ bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     m_hotStuffMsgCache->addExecutedPrepare(executedPrepare);
 
     // add executed block into the cache
-    m_hotStuffMsgCache->addPrepareCache(executedPrepare, minValidNodes(), m_idx);
+    m_hotStuffMsgCache->addPrepareCache(executedPrepare, m_idx);
     printHotStuffMsgInfo(
         executedPrepare, "handlePrepareMsg succ: send executedPrepare to the leader", INFO);
 
@@ -610,6 +638,11 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
         printHotStuffMsgInfo(prepareMsg, "InvalidPrepareMsg: already cached", WARNING);
         return false;
     }
+    if (prepareMsg->blockHeight() <= m_highestBlockHeader.number())
+    {
+        printHotStuffMsgInfo(prepareMsg, "InvalidPrepare: has consensused", WARNING);
+        return false;
+    }
     if (!isValidHotStuffMsg(prepareMsg))
     {
         return false;
@@ -623,7 +656,7 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     }
     auto highQC = prepareMsg->justifyQC();
     // the view of prepareMsg must be larger than the view of highQC
-    if (prepareMsg->view() <= highQC->view() || prepareMsg->blockHeight() <= highQC->blockHeight())
+    if (prepareMsg->view() <= highQC->view() || prepareMsg->blockHeight() < highQC->blockHeight())
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("invalid view or height")
@@ -631,26 +664,14 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
             << LOG_KV("prepareView", prepareMsg->view())
             << LOG_KV("prepareHeight", prepareMsg->blockHeight())
             << LOG_KV("highQCView", highQC->view()) << LOG_KV("highQCHeight", highQC->blockHeight())
-            << LOG_KV("highQCHash", highQC->blockHash().abridged());
-        return false;
-    }
-    // check the highestQC(the current proposer must be extended from the highQC)
-    if (prepareMsg->getBlock()->blockHeader().parentHash() != highQC->blockHash())
-    {
-        HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("the current proposer doesn't extend from highQC")
-            << LOG_KV("prepareHash", prepareMsg->blockHash().abridged())
-            << LOG_KV("prepareView", prepareMsg->view())
-            << LOG_KV("prepareHeight", prepareMsg->blockHeight())
-            << LOG_KV("highQCView", highQC->view()) << LOG_KV("highQCHeight", highQC->blockHeight())
-            << LOG_KV("highQCHash", highQC->blockHash().abridged());
+            << LOG_KV("highQCHash", highQC->blockHash().abridged()) << LOG_KV("idx", nodeIdx());
         return false;
     }
     // check safeNode, the prepareMsg must be extended from lockedQC
     auto curLockedQC = m_hotStuffMsgCache->lockedQC();
     if (curLockedQC &&
         prepareMsg->getBlock()->blockHeader().parentHash() != curLockedQC->blockHash() &&
-        prepareMsg->justifyView() < curLockedQC->view())
+        prepareMsg->justifyView() <= curLockedQC->view())
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("InvalidPrepareMsg: safeNode check failed")
@@ -700,6 +721,11 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
     {
         return false;
     }
+    if (QCMsg->blockHeight() <= m_highestBlockHeader.number())
+    {
+        printHotStuffMsgInfo(QCMsg, "Invalid QCMsg: has consensused", WARNING);
+        return false;
+    }
     // catchup the view after block sync
     if (QCMsg->view() > m_view && QCMsg->blockHeight() >= m_highestBlockHeader.number())
     {
@@ -707,9 +733,9 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
         printHotStuffMsgInfo(QCMsg, "catchup the view to the QCView");
     }
     // require to be from the leader
-    if (getLeader() != QCMsg->idx())
+    if (getLeader(QCMsg->view()) != QCMsg->idx())
     {
-        printHotStuffMsgInfo(QCMsg, "invalid QCMsg for not from the leader");
+        printHotStuffMsgInfo(QCMsg, "Invalid QCMsg for not from the leader");
         return false;
     }
     // check sigList
@@ -731,20 +757,19 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
  */
 bool HotStuffEngine::onReceivePrepareQCMsg(QuorumCert::Ptr prepareQC)
 {
-    if (!onReceiveQCMsg(prepareQC, HotStuffPacketType::PrecommitVotePacket))
-    {
-        return false;
-    }
-    printHotStuffMsgInfo(prepareQC, "onReceivePrepareQCMsg: set the prepareQC", INFO);
-    m_hotStuffMsgCache->setPrepareQC(prepareQC);
-    return true;
+    return onReceiveQCMsg(prepareQC, HotStuffPacketType::PrecommitVotePacket);
 }
 
 bool HotStuffEngine::isValidVoteMsg(HotStuffMsg::Ptr voteMsg)
 {
-    if (getLeader() != m_idx)
+    if (getLeader(voteMsg->view()) != m_idx)
     {
         printHotStuffMsgInfo(voteMsg, "invalid voteMsg for this node is not the leader", WARNING);
+        return false;
+    }
+    if (voteMsg->blockHeight() <= m_highestBlockHeader.number)
+    {
+        printHotStuffMsgInfo(voteMsg, "invalid voteMsg for invalid blockNumber", WARNING);
         return false;
     }
     if (!isValidHotStuffMsg(voteMsg))
@@ -780,16 +805,16 @@ bool HotStuffEngine::handlePreCommitVoteMsg(HotStuffMsg::Ptr preCommitMsg)
         return false;
     }
     printHotStuffMsgInfo(preCommitMsg, "handle pre-commit vote message", INFO);
-    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg, minValidNodes(), m_idx);
+    m_hotStuffMsgCache->addPreCommitCache(preCommitMsg, m_idx);
     size_t cachedPrecommitSize =
         m_hotStuffMsgCache->getPreCommitCacheSize(preCommitMsg->blockHash());
     auto lockedQCMsg = checkAndGenerateQC(
         cachedPrecommitSize, preCommitMsg, HotStuffPacketType::PrecommitQCPacket);
     if (lockedQCMsg)
     {
+        m_hotStuffMsgCache->clearPreCommitCache(preCommitMsg->blockHash());
         onReceiveQCMsg(lockedQCMsg, HotStuffPacketType::CommitVotePacket);
     }
-
     return true;
 }
 
@@ -803,7 +828,15 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
     // check hash
     if (!m_hotStuffMsgCache->existedExecutedPrepare(QCMsg->blockHash()))
     {
-        printHotStuffMsgInfo(QCMsg, "Invalid QCMsg: not exist in executedPrepare", WARNING);
+        if (QCMsg->view() > m_view && QCMsg->blockHeight() >= m_consensusBlockNumber)
+        {
+            printHotStuffMsgInfo(QCMsg, "Receive FutureQCMsg", INFO);
+            m_hotStuffMsgCache->addFutureQC(QCMsg);
+        }
+        else
+        {
+            printHotStuffMsgInfo(QCMsg, "Invalid QCMsg: not exist in executedPrepare", WARNING);
+        }
         return false;
     }
     // omitEmptyBlock directly
@@ -812,40 +845,48 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
         printHotStuffMsgInfo(QCMsg, "omit empty block when receive QCMsg");
         return false;
     }
+    m_timeManager->m_lastSignTime = utcTime();
+    if (QCMsg->type() == HotStuffPacketType::PrepareQCPacket)
+    {
+        printHotStuffMsgInfo(QCMsg, "onReceivePrepareQCMsg: set the prepareQC", INFO);
+        m_hotStuffMsgCache->setPrepareQC(QCMsg);
+    }
+    if (QCMsg->type() == HotStuffPacketType::PrecommitQCPacket)
+    {
+        printHotStuffMsgInfo(QCMsg, "onReceivePrecommitQCMsg: modify lockedQC");
+        m_hotStuffMsgCache->addLockedQC(QCMsg);
+    }
+    if (QCMsg->type() == HotStuffPacketType::CommitQCPacket)
+    {
+        printHotStuffMsgInfo(QCMsg, "onReceiveCommitQCMsg: addCommitQC");
+        m_hotStuffMsgCache->addCommitQC(QCMsg);
+    }
+    // try to commit block when receive QCMsg
+    tryToCommitBlock();
+    if (packetType == HotStuffPacketType::DecideVotePacket)
+    {
+        return true;
+    }
+
     // send the prepare-vote message to the leader
     HotStuffMsg::Ptr voteMsg = m_hotStuffMsgFactory->buildHotStuffMsg(
         m_keyPair, packetType, m_idx, QCMsg->blockHash(), QCMsg->blockHeight(), m_view);
     // send commit-vote to the leader
     sendMessageToLeader(voteMsg);
-    if (getLeader() != m_idx)
+
+    if (getLeader(voteMsg->view()) == m_idx)
     {
-        return true;
+        // try to handle the vote message in consideration of there is only one node
+        handlePrepareVoteMsg(voteMsg);
+        handlePreCommitVoteMsg(voteMsg);
+        handleCommitVoteMsg(voteMsg);
     }
-    // the node is the leader
-    if (QCMsg->type() == HotStuffPacketType::PrepareQCPacket)
-    {
-        m_hotStuffMsgCache->setPrepareQC(QCMsg);
-    }
-    if (QCMsg->type() == HotStuffPacketType::PrecommitQCPacket)
-    {
-        m_hotStuffMsgCache->addLockedQC(QCMsg);
-    }
-    // try to handle the vote message in consideration of there is only one node
-    handlePrepareVoteMsg(voteMsg);
-    handlePreCommitVoteMsg(voteMsg);
-    handleCommitVoteMsg(voteMsg);
     return true;
 }
 
 bool HotStuffEngine::onReceivePrecommitQCMsg(QuorumCert::Ptr preCommitQC)
 {
-    if (!onReceiveQCMsg(preCommitQC, HotStuffPacketType::CommitVotePacket))
-    {
-        return false;
-    }
-    printHotStuffMsgInfo(preCommitQC, "onReceivePrecommitQCMsg: modify lockedQC");
-    m_hotStuffMsgCache->addLockedQC(preCommitQC);
-    return true;
+    return onReceiveQCMsg(preCommitQC, HotStuffPacketType::CommitVotePacket);
 }
 
 bool HotStuffEngine::handleCommitVoteMsg(HotStuffMsg::Ptr commitMsg)
@@ -859,31 +900,39 @@ bool HotStuffEngine::handleCommitVoteMsg(HotStuffMsg::Ptr commitMsg)
         return false;
     }
     printHotStuffMsgInfo(commitMsg, "handleCommitVoteMsg: add commit vote to the cache", INFO);
-    m_hotStuffMsgCache->addCommitCache(commitMsg, minValidNodes(), m_idx);
+    m_hotStuffMsgCache->addCommitCache(commitMsg, m_idx);
     size_t commitMsgSize = m_hotStuffMsgCache->getCommitCacheSize(commitMsg->blockHash());
-    if (checkAndGenerateQC(commitMsgSize, commitMsg, HotStuffPacketType::CommitQCPacket))
+    auto commitQC =
+        checkAndGenerateQC(commitMsgSize, commitMsg, HotStuffPacketType::CommitQCPacket);
+    if (commitQC)
     {
-        // collect enough commit-vote message, broadcast commitQC message and commit block
-        return commitBlock();
+        m_hotStuffMsgCache->clearCommitCache(commitMsg->blockHash());
+        onReceiveQCMsg(commitQC, HotStuffPacketType::DecideVotePacket);
     }
     return true;
 }
 
-bool HotStuffEngine::commitBlock()
+bool HotStuffEngine::tryToCommitBlock()
 {
-    if (!m_hotStuffMsgCache->lockedQC())
+    if (!m_hotStuffMsgCache->executedPrepareCache())
     {
         HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("commitBlock Failed: empty executedPrepareCache")
+            << LOG_DESC("tryToCommitBlock Failed: empty executedPrepareCache")
             << LOG_KV("highestNum", m_highestBlockHeader.number())
-            << LOG_KV("highestHash", m_highestBlockHeader.number()) << LOG_KV("view", m_view);
+            << LOG_KV("highestHash", m_highestBlockHeader.number()) << LOG_KV("view", m_view)
+            << LOG_KV("idx", nodeIdx());
         return false;
     }
-    // check view
+    // check commitQC
+    if (!m_hotStuffMsgCache->commitQC())
+    {
+        return false;
+    }
+    // check lockedQC
     if (m_hotStuffMsgCache->lockedQC()->view() != m_view)
     {
         HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("CommitBlock Failed: invalidView")
+            << LOG_DESC("tryToCommitBlock Failed: invalidView")
             << LOG_KV("prepView", m_hotStuffMsgCache->lockedQC()->view())
             << LOG_KV("curView", m_view)
             << LOG_KV("prepHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
@@ -895,7 +944,7 @@ bool HotStuffEngine::commitBlock()
     if (m_hotStuffMsgCache->lockedQC()->blockHeight() != m_highestBlockHeader.number() + 1)
     {
         HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("CommitBlock Failed: invalid height")
+            << LOG_DESC("tryToCommitBlock Failed: invalid height")
             << LOG_KV("highestNum", m_highestBlockHeader.number())
             << LOG_KV("prepHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
             << LOG_KV("highestHash", m_highestBlockHeader.number())
@@ -916,7 +965,7 @@ bool HotStuffEngine::commitBlock()
         m_blockSync->noteSealingBlockNumber(
             m_hotStuffMsgCache->executedPrepareCache()->blockHeight());
         HOTSTUFFENGINE_LOG(INFO)
-            << LOG_DESC("CommitBlock Succ")
+            << LOG_DESC("tryToCommitBlock Succ")
             << LOG_KV("prepHeight", m_hotStuffMsgCache->executedPrepareCache()->blockHeight())
             << LOG_KV("prepIdx", m_hotStuffMsgCache->executedPrepareCache()->idx())
             << LOG_KV("hash", m_hotStuffMsgCache->executedPrepareCache()->blockHash().abridged())
@@ -930,7 +979,7 @@ bool HotStuffEngine::commitBlock()
     else
     {
         HOTSTUFFENGINE_LOG(WARNING)
-            << LOG_DESC("CommitBlock Failed")
+            << LOG_DESC("tryToCommitBlock Failed")
             << LOG_KV("reqNum", m_hotStuffMsgCache->executedPrepareCache()->blockHeight())
             << LOG_KV("curNum", m_highestBlockHeader.number())
             << LOG_KV("reqIdx", m_hotStuffMsgCache->executedPrepareCache()->idx())
@@ -942,13 +991,7 @@ bool HotStuffEngine::commitBlock()
 
 bool HotStuffEngine::onReceiveCommitQCMsg(QuorumCert::Ptr commitQC)
 {
-    if (!onReceiveQCMsg(commitQC, HotStuffPacketType::CommitQCPacket))
-    {
-        return false;
-    }
-    printHotStuffMsgInfo(commitQC, "onReceiveCommitQCMsg and commitBlock", INFO);
-    // commit the block
-    return commitBlock();
+    return onReceiveQCMsg(commitQC, HotStuffPacketType::DecideVotePacket);
 }
 
 bool HotStuffEngine::reachBlockIntervalTime()
@@ -1023,7 +1066,8 @@ void HotStuffEngine::collectGarbage()
         m_hotStuffMsgCache->collectCache(m_highestBlockHeader);
         m_timeManager->m_lastGarbageCollection = now;
         HOTSTUFFENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
-                                  << LOG_KV("Timecost", 1000 * t.elapsed());
+                                  << LOG_KV("Timecost", 1000 * t.elapsed())
+                                  << LOG_KV("idx", nodeIdx());
     }
 }
 
@@ -1031,11 +1075,37 @@ void HotStuffEngine::handleFuturePreparePacket()
 {
     Guard l(m_mutex);
     auto futurePrepare = m_hotStuffMsgCache->findFuturePrepareMsg(m_consensusBlockNumber);
-    if (!futurePrepare)
+    if (!futurePrepare || futurePrepare->view() < m_view)
     {
         return;
     }
     printHotStuffMsgInfo(futurePrepare, "handleFuturePreparePacket");
-    handlePrepareMsg(futurePrepare);
+    if (!handlePrepareMsg(futurePrepare))
+    {
+        return;
+    }
+    auto executedBlockHash = m_hotStuffMsgCache->executedPrepareCache()->blockHash();
+    auto prepareQC =
+        m_hotStuffMsgCache->getFutureQCMsg(HotStuffPacketType::PrepareQCPacket, executedBlockHash);
+    if (prepareQC)
+    {
+        printHotStuffMsgInfo(prepareQC, "handleFuturePreparePacket: find cached future prepareQC");
+        onReceivePrepareQCMsg(prepareQC);
+    }
+    auto lockedQC = m_hotStuffMsgCache->getFutureQCMsg(
+        HotStuffPacketType::PrecommitQCPacket, executedBlockHash);
+    if (lockedQC)
+    {
+        printHotStuffMsgInfo(lockedQC, "handleFuturePreparePacket: find cached future lockedQC");
+        onReceivePrecommitQCMsg(lockedQC);
+    }
+    auto commitQC = m_hotStuffMsgCache->getFutureQCMsg(
+        HotStuffPacketType::CommitQCPacket, futurePrepare->blockHash());
+    if (commitQC)
+    {
+        printHotStuffMsgInfo(commitQC, "handleFuturePreparePacket: find cached future commitQC");
+        onReceiveCommitQCMsg(commitQC);
+    }
     m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
+    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
 }

@@ -148,7 +148,7 @@ protected:
     virtual bool sendMessage(HotStuffMsg::Ptr msg, dev::network::NodeID const& nodeId);
     virtual bool sendMessageToLeader(HotStuffMsg::Ptr msg);
 
-    virtual bool commitBlock();
+    virtual bool tryToCommitBlock();
 
     // get leader according to view
     virtual IDXTYPE getLeader(VIEWTYPE const& view) const { return view % m_nodeNum; }
@@ -182,6 +182,7 @@ protected:
     std::atomic<VIEWTYPE> m_view = {0};
     std::atomic<VIEWTYPE> m_toView = {0};
     QuorumCert::Ptr m_justifyQC = nullptr;
+
     std::atomic<int64_t> m_consensusBlockNumber = {0};
     // commit empty block or not
     std::atomic_bool m_omitEmptyBlock = {true};

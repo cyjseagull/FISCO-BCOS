@@ -101,36 +101,19 @@ void HotStuffMsgCache::addLockedQC(QuorumCert::Ptr msg)
     m_lockedQC = msg;
 }
 
-void HotStuffMsgCache::addNewViewCache(
-    HotStuffNewViewMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg, IDXTYPE const& nodeIdx)
 {
     auto cacheSize = getNewViewCacheSize(msg->view());
-    if (msg->idx() == nodeIdx)
-    {
-        if (cacheSize >= minValidNodes)
-        {
-            return;
-        }
-    }
-
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addNewViewCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
-                             << LOG_KV("cacheSize", (cacheSize + 1))
-                             << LOG_KV("reqIdx", msg->idx());
-    return addCache(m_newViewCache, msg, msg->view());
+                             << LOG_KV("cacheSize", (cacheSize)) << LOG_KV("reqIdx", msg->idx());
+    m_newViewCache[msg->view()][nodeIdx] = msg;
 }
-void HotStuffMsgCache::addPrepareCache(
-    HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
+
+void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
 {
     auto cacheSize = getPrepareCacheSize(msg->blockHash());
-    if (msg->idx() == nodeIdx)
-    {
-        if (cacheSize >= minValidNodes)
-        {
-            return;
-        }
-    }
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPrepareCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
@@ -139,17 +122,9 @@ void HotStuffMsgCache::addPrepareCache(
     return addCache(m_prepareCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addPreCommitCache(
-    HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addPreCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
 {
     auto cacheSize = getPreCommitCacheSize(msg->blockHash());
-    if (msg->idx() == nodeIdx)
-    {
-        if (cacheSize >= minValidNodes)
-        {
-            return;
-        }
-    }
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addPreCommitCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
@@ -158,21 +133,13 @@ void HotStuffMsgCache::addPreCommitCache(
     return addCache(m_preCommitCache, msg, msg->blockHash());
 }
 
-void HotStuffMsgCache::addCommitCache(
-    HotStuffMsg::Ptr msg, size_t const& minValidNodes, IDXTYPE const& nodeIdx)
+void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg, IDXTYPE const& nodeIdx)
 {
     auto cacheSize = getCommitCacheSize(msg->blockHash());
-    if (msg->idx() == nodeIdx)
-    {
-        if (cacheSize >= minValidNodes)
-        {
-            return;
-        }
-    }
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addCommitCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
-                             << LOG_KV("newViewSize", (cacheSize + 1))
+                             << LOG_KV("cacheSize", (cacheSize + 1))
                              << LOG_KV("reqIdx", msg->idx());
     return addCache(m_commitCache, msg, msg->blockHash());
 }
@@ -220,8 +187,14 @@ void HotStuffMsgCache::resetCacheAfterCommit(h256 const& blockHash)
     clearCache(m_prepareCache, blockHash);
     clearCache(m_preCommitCache, blockHash);
     clearCache(m_commitCache, blockHash);
+
+    eraseFutureQCMsg(HotStuffPacketType::PrepareQCPacket, blockHash);
+    eraseFutureQCMsg(HotStuffPacketType::PrecommitQCPacket, blockHash);
+    eraseFutureQCMsg(HotStuffPacketType::CommitQCPacket, blockHash);
+
     m_rawPrepareCache.reset();
     m_executedPrepareCache.reset();
+    m_commitQC.reset();
 }
 
 void HotStuffMsgCache::removeInvalidViewChange(VIEWTYPE const& view)
@@ -299,6 +272,40 @@ void HotStuffMsgCache::eraseFuturePrepare(dev::eth::BlockNumber const& blockNumb
     {
         m_futurePrepareCache.erase(blockNumber);
     }
+}
+
+void HotStuffMsgCache::addFutureQC(QuorumCert::Ptr qcMsg)
+{
+    HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("try to addFutureQC")
+                             << LOG_KV("reqHash", qcMsg->blockHash().abridged())
+                             << LOG_KV("reqHeight", qcMsg->blockHeight())
+                             << LOG_KV("reqView", qcMsg->view()) << LOG_KV("idx", qcMsg->idx());
+    if (!m_futureQCCache.count(qcMsg->type()))
+    {
+        std::unordered_map<h256, QuorumCert::Ptr> qcCache;
+        m_futureQCCache[qcMsg->type()] = qcCache;
+    }
+    if (m_futureQCCache[qcMsg->type()].count(qcMsg->blockHash()))
+    {
+        auto cachedQC = m_futureQCCache[qcMsg->type()][qcMsg->blockHash()];
+        if (cachedQC->view() <= qcMsg->view())
+        {
+            m_futureQCCache[qcMsg->type()][qcMsg->blockHash()] = qcMsg;
+        }
+    }
+}
+
+QuorumCert::Ptr HotStuffMsgCache::getFutureQCMsg(int msgType, h256 const& blockHash)
+{
+    if (!m_futureQCCache.count(msgType))
+    {
+        return nullptr;
+    }
+    if (!m_futureQCCache[msgType].count(blockHash))
+    {
+        return nullptr;
+    }
+    return m_futureQCCache[msgType][blockHash];
 }
 
 void HotStuffMsgCache::collectCache(dev::eth::BlockHeader const& highestBlockHeader)

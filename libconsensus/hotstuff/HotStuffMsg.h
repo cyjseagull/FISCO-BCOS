@@ -45,6 +45,8 @@ struct HotStuffPacketType
     // decide phase
     static const int CommitVotePacket = 0x06;
     static const int CommitQCPacket = 0x07;
+
+    static const int DecideVotePacket = 0x08;
 };
 
 // basic hotstuffMsg
@@ -222,8 +224,8 @@ public:
         h256 const& _blockHash, dev::eth::BlockNumber const& _blockHeight, VIEWTYPE const& _view,
         QuorumCert::Ptr _justifyQC);
 
-    HotStuffPrepareMsg(KeyPair const& _keyPair, std::shared_ptr<dev::eth::Block> pBlock,
-        HotStuffPrepareMsg::Ptr prepareMsg);
+    HotStuffPrepareMsg(
+        KeyPair const& _keyPair, Sealing::Ptr sealing, HotStuffPrepareMsg::Ptr prepareMsg);
 
     void setBlock(std::shared_ptr<dev::eth::Block> block)
     {
@@ -231,21 +233,12 @@ public:
         m_pBlock->encode(m_blockData);
     }
 
-    void decode(bytesConstRef data) override
-    {
-        HotStuffMsg::decode(data);
-        m_pBlock = std::make_shared<dev::eth::Block>();
-        m_pBlock->decode(ref(m_blockData), dev::eth::CheckTransaction::None, false, true);
-    }
+    void decode(bytesConstRef data) override { HotStuffMsg::decode(data); }
 
     std::shared_ptr<dev::eth::Block> getBlock() { return m_pBlock; }
-
-    void setExecResult(dev::blockverifier::ExecutiveContext::Ptr _execContext)
-    {
-        m_pExecContext = _execContext;
-    }
-
     dev::blockverifier::ExecutiveContext::Ptr getExecContext() { return m_pExecContext; }
+
+    bytes const& blockData() const { return m_blockData; }
 
 protected:
     void convertFieldsToRLPStream(RLPStream& _s) const override;
@@ -253,6 +246,7 @@ protected:
 
 protected:
     bytes m_blockData;
+
     std::shared_ptr<dev::eth::Block> m_pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
