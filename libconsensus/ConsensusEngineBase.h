@@ -211,7 +211,7 @@ public:
         // the parentNode exists in the peer list
         if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
         {
-            PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+            ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
                                   << LOG_KV("chosedParentNode", selectedNode.abridged())
                                   << LOG_KV("chosedIdx", parentIdx);
             nodeList.push_back(selectedNode);
@@ -224,7 +224,7 @@ public:
                 parentIdx = (parentIdx - 1) / m_broadcastNodes;
                 if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
                 {
-                    PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+                    ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
                                           << LOG_KV("chosedParentNode", selectedNode.abridged())
                                           << LOG_KV("chosedIdx", parentIdx);
                     nodeList.push_back(selectedNode);
@@ -250,7 +250,7 @@ public:
             // the expectedNode existed in the peers
             if (getNodeIDByIndex(selectedNode, expectedIdx) && peers.count(selectedNode))
             {
-                PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
+                ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
                                       << LOG_KV("chosedNode", selectedNode.abridged())
                                       << LOG_KV("chosedIdx", expectedIdx);
                 nodeList.push_back(selectedNode);
@@ -444,6 +444,7 @@ protected:
     std::atomic_bool m_cfgErr = {false};
 
     std::shared_ptr<dev::eth::BlockFactory> m_blockFactory = nullptr;
+    ssize_t m_broadcastNodes = 3;
 };
 }  // namespace consensus
 }  // namespace dev
