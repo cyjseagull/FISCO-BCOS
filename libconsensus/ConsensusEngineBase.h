@@ -68,6 +68,9 @@ public:
                                   << errinfo_comment("Protocol id must be larger than 0"));
         m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
+        m_blockSync->registerNodeIdFilterHandler(boost::bind(
+            &ConsensusEngineBase::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this,
+            _1));
     }
 
     void start() override;
@@ -189,6 +192,75 @@ public:
             }
         }
         return index;
+    }
+
+    template <typename T>
+    dev::p2p::NodeIDs NodeIdFilterHandler(T const& peers)
+    {
+        dev::p2p::NodeIDs nodeList;
+        dev::p2p::NodeID selectedNode;
+        // add the child node
+        RecursiveFilterChildNode(nodeList, m_idx, peers);
+        // add the parent node
+        size_t parentIdx = (m_idx - 1) / m_broadcastNodes;
+        // the parentNode is the node-self
+        if (parentIdx == m_idx)
+        {
+            return nodeList;
+        }
+        // the parentNode exists in the peer list
+        if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
+        {
+            PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+                                  << LOG_KV("chosedParentNode", selectedNode.abridged())
+                                  << LOG_KV("chosedIdx", parentIdx);
+            nodeList.push_back(selectedNode);
+        }
+        // the parentNode doesn't exist in the peer list
+        else
+        {
+            while (parentIdx != 0)
+            {
+                parentIdx = (parentIdx - 1) / m_broadcastNodes;
+                if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
+                {
+                    PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
+                                          << LOG_KV("chosedParentNode", selectedNode.abridged())
+                                          << LOG_KV("chosedIdx", parentIdx);
+                    nodeList.push_back(selectedNode);
+                    break;
+                }
+            }
+        }
+        return nodeList;
+    }
+
+    template <typename T>
+    void RecursiveFilterChildNode(
+        dev::p2p::NodeIDs& nodeList, ssize_t const& startIndex, T const& peers)
+    {
+        dev::p2p::NodeID selectedNode;
+        for (ssize_t i = 1; i <= m_broadcastNodes; i++)
+        {
+            ssize_t expectedIdx = startIndex * 3 + i;
+            if (expectedIdx >= m_nodeNum)
+            {
+                break;
+            }
+            // the expectedNode existed in the peers
+            if (getNodeIDByIndex(selectedNode, expectedIdx) && peers.count(selectedNode))
+            {
+                PBFTENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
+                                      << LOG_KV("chosedNode", selectedNode.abridged())
+                                      << LOG_KV("chosedIdx", expectedIdx);
+                nodeList.push_back(selectedNode);
+            }
+            // selected the child
+            else
+            {
+                RecursiveFilterChildNode(nodeList, expectedIdx, peers);
+            }
+        }
     }
 
 protected:

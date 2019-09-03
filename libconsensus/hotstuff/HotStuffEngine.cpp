@@ -358,14 +358,15 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
                              << LOG_KV("view", newViewMsg->view())
                              << LOG_KV("justifyView", newViewMsg->justifyView())
                              << LOG_KV("nodeIdx", nodeIdx());
-    if (m_hotStuffMsgCache->getNewViewCacheSize(newViewMsg->view()) < (size_t)(minValidNodes() - 1))
+    // if (m_hotStuffMsgCache->getNewViewCacheSize(newViewMsg->view()) < (size_t)(minValidNodes() -
+    // 1))
+    //{
+    m_hotStuffMsgCache->addNewViewCache(newViewMsg);
+    if (newViewMsg->blockHeight() == m_highestBlockHeader.number())
     {
-        m_hotStuffMsgCache->addNewViewCache(newViewMsg);
-        if (newViewMsg->blockHeight() == m_highestBlockHeader.number())
-        {
-            triggerGeneratePrepare();
-        }
+        triggerGeneratePrepare();
     }
+    //}
     return true;
 }
 
@@ -425,6 +426,7 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
     m_canGeneratePrepare(false);
     HotStuffPrepareMsg::Ptr prepareMsg = m_hotStuffMsgFactory->buildHotStuffPrepare(m_keyPair,
         m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, m_justifyQC);
+    m_hotStuffMsgCache->clearNextViewCache(m_view);
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("generateAndBroadcastPrepare")
                              << LOG_KV("rawPrepareHash", block->blockHeader().hash().abridged())
                              << LOG_KV("blockHeight", block->blockHeader().number())
