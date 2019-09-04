@@ -472,8 +472,8 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
                              << LOG_KV("justifyView", prepareMsg->justifyView())
                              << LOG_KV("view", m_view) << LOG_KV("idx", m_idx);
     prepareMsg->setBlock(block);
-#if 0
     broadCastMsg(prepareMsg);
+#if 0
     deliverMessage(prepareMsg);
 #endif
 
@@ -584,11 +584,12 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
 
         m_hotStuffMsgCache->setSigList(QCMsg);
-// broadcast message to the replias
-#if 0
+        // broadcast message to the replias
+
         broadCastMsg(QCMsg);
-#endif
+#if 0
         deliverMessage(QCMsg);
+#endif
         return QCMsg;
     }
     return nullptr;
@@ -656,7 +657,9 @@ bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
  */
 bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 {
+#if 0
     deliverMessage(prepareMsg);
+#endif
     if (!isValidPrepareMsg(prepareMsg))
     {
         return false;
@@ -800,7 +803,9 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
  */
 bool HotStuffEngine::onReceivePrepareQCMsg(QuorumCert::Ptr prepareQC)
 {
+#if 0
     deliverMessage(prepareQC);
+#endif
     return onReceiveQCMsg(prepareQC, HotStuffPacketType::PrecommitVotePacket);
 }
 
@@ -872,7 +877,7 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
     // check hash
     if (!m_hotStuffMsgCache->existedExecutedPrepare(QCMsg->blockHash()))
     {
-        if (QCMsg->view() > m_view && QCMsg->blockHeight() >= m_consensusBlockNumber)
+        if (QCMsg->view() >= m_view && QCMsg->blockHeight() >= m_consensusBlockNumber)
         {
             printHotStuffMsgInfo(QCMsg, "Receive FutureQCMsg", INFO);
             m_hotStuffMsgCache->addFutureQC(QCMsg);
@@ -930,7 +935,9 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
 
 bool HotStuffEngine::onReceivePrecommitQCMsg(QuorumCert::Ptr preCommitQC)
 {
+#if 0
     deliverMessage(preCommitQC);
+#endif
     return onReceiveQCMsg(preCommitQC, HotStuffPacketType::CommitVotePacket);
 }
 
@@ -978,10 +985,10 @@ bool HotStuffEngine::tryToCommitBlock()
     {
         HOTSTUFFENGINE_LOG(WARNING)
             << LOG_DESC("tryToCommitBlock Failed: invalidView")
-            << LOG_KV("prepView", m_hotStuffMsgCache->lockedQC()->view())
+            << LOG_KV("lockedQCView", m_hotStuffMsgCache->lockedQC()->view())
             << LOG_KV("curView", m_view)
-            << LOG_KV("prepHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
-            << LOG_KV("prepHash", m_hotStuffMsgCache->lockedQC()->blockHash().abridged())
+            << LOG_KV("lockedQCHeight", m_hotStuffMsgCache->lockedQC()->blockHeight())
+            << LOG_KV("lockedQCHash", m_hotStuffMsgCache->lockedQC()->blockHash().abridged())
             << LOG_KV("idx", nodeIdx());
         return false;
     }
@@ -1036,7 +1043,9 @@ bool HotStuffEngine::tryToCommitBlock()
 
 bool HotStuffEngine::onReceiveCommitQCMsg(QuorumCert::Ptr commitQC)
 {
+#if 0
     deliverMessage(commitQC);
+#endif
     return onReceiveQCMsg(commitQC, HotStuffPacketType::DecideVotePacket);
 }
 

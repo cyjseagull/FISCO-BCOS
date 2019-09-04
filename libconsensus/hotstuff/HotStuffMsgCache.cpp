@@ -290,8 +290,10 @@ void HotStuffMsgCache::addFutureQC(QuorumCert::Ptr qcMsg)
         if (cachedQC->view() <= qcMsg->view())
         {
             m_futureQCCache[qcMsg->type()][qcMsg->blockHash()] = qcMsg;
+            return;
         }
     }
+    m_futureQCCache[qcMsg->type()][qcMsg->blockHash()] = qcMsg;
 }
 
 QuorumCert::Ptr HotStuffMsgCache::getFutureQCMsg(int msgType, h256 const& blockHash)
