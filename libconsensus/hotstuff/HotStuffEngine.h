@@ -177,6 +177,33 @@ protected:
 
     bool checkSign(HotStuffMsg::Ptr hotStuffReq) const;
 
+    bool broadcastFilter(dev::network::NodeID const& nodeId, int packetType, std::string const& key)
+    {
+        if (!m_broadcastCache.count(nodeId))
+        {
+            return false;
+        }
+        if (!m_broadcastCache[nodeId].count(packetType))
+        {
+            return false;
+        }
+        return m_broadcastCache[nodeId][packetType].count(key);
+    }
+    void broadcastMark(dev::network::NodeID const& nodeId, int packetType, std::string const& key)
+    {
+        if (!m_broadcastCache.count(nodeId))
+        {
+            BroadcastCache cache;
+            m_broadcastCache[nodeId] = cache;
+        }
+        if (!m_broadcastCache[nodeId].count(packetType))
+        {
+            std::unordered_set<std::string> cache;
+            m_broadcastCache[nodeId][packetType] = cache;
+        }
+        m_broadcastCache[nodeId][packetType].insert(key);
+    }
+
 protected:
     // the highest blockHeader
     dev::eth::BlockHeader m_highestBlockHeader;
@@ -208,6 +235,9 @@ protected:
     // handlers
     std::function<void(bool const&)> m_canGeneratePrepare;
     static const unsigned c_PopWaitSeconds = 5;
+
+    using BroadcastCache = std::unordered_map<int, std::unordered_set<std::string>>;
+    std::unordered_map<dev::network::NodeID, BroadcastCache> m_broadcastCache;
 };
 }  // namespace consensus
 }  // namespace dev

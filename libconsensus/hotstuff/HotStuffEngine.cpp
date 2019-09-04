@@ -221,7 +221,7 @@ bool HotStuffEngine::broadCastMsg(
     return true;
 }
 
-virtual bool HotStuffEngine::deliverMessage(HotStuffMsg::Ptr msg)
+bool HotStuffEngine::deliverMessage(HotStuffMsg::Ptr msg)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -236,23 +236,26 @@ virtual bool HotStuffEngine::deliverMessage(HotStuffMsg::Ptr msg)
     }
     auto selectedNodes = NodeIdFilterHandler(peers);
     NodeIDs targetNodes;
+    broadcastMark(msg->idx(), msg->type(), msg->uniqueKey());
     for (auto const& nodeId : selectedNodes)
     {
         /// packet has been broadcasted?
-        if (broadcastFilter(nodeId, packetType, prepareReq->uniqueKey()))
+        if (broadcastFilter(nodeId, msg->type(), msg->uniqueKey()))
         {
             continue;
         }
         targetNodes.push_back(nodeId);
-        broadcastMark(nodeId, packetType, prepareReq->uniqueKey());
+        broadcastMark(nodeId, msg->type(), msg->uniqueKey());
     }
     if (targetNodes.size() == 0)
     {
-        return;
+        return true;
     }
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast message") << LOG_KV("height", msg->blockHeight())
-                          << LOG_KV("hash", msg->blockHash().abridged())
-                          << LOG_KV("targetNodesSize", targetNodes.size()) << LOG_KV("idx", m_idx);
+    HOTSTUFFENGINE_LOG(DEBUG) << LOG_DESC("broadcast message")
+                              << LOG_KV("height", msg->blockHeight())
+                              << LOG_KV("hash", msg->blockHash().abridged())
+                              << LOG_KV("targetNodesSize", targetNodes.size())
+                              << LOG_KV("idx", m_idx);
     m_service->asyncMulticastMessageByNodeIDList(targetNodes, encodeToP2PMessage(msg));
     return true;
 }

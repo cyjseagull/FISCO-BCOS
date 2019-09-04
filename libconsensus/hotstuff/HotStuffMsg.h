@@ -93,6 +93,7 @@ public:
     Signature const& blockSig() const { return m_blockSig; }
 
     virtual h256 calSignatureContent();
+    std::string uniqueKey() { return m_patialSig.hex() + m_blockSig.hex(); }
 
 protected:
     virtual void convertFieldsToRLPStream(RLPStream& _s) const;
