@@ -221,6 +221,42 @@ bool HotStuffEngine::broadCastMsg(
     return true;
 }
 
+virtual bool HotStuffEngine::deliverMessage(HotStuffMsg::Ptr msg)
+{
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
+    m_connectedNode = sessions.size();
+    if (m_connectedNode <= 0)
+    {
+        return false;
+    }
+    std::set<dev::network::NodeID> peers;
+    for (auto const& session : sessions)
+    {
+        peers.insert(session.nodeID());
+    }
+    auto selectedNodes = NodeIdFilterHandler(peers);
+    NodeIDs targetNodes;
+    for (auto const& nodeId : selectedNodes)
+    {
+        /// packet has been broadcasted?
+        if (broadcastFilter(nodeId, packetType, prepareReq->uniqueKey()))
+        {
+            continue;
+        }
+        targetNodes.push_back(nodeId);
+        broadcastMark(nodeId, packetType, prepareReq->uniqueKey());
+    }
+    if (targetNodes.size() == 0)
+    {
+        return;
+    }
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast message") << LOG_KV("height", msg->blockHeight())
+                          << LOG_KV("hash", msg->blockHash().abridged())
+                          << LOG_KV("targetNodesSize", targetNodes.size()) << LOG_KV("idx", m_idx);
+    m_service->asyncMulticastMessageByNodeIDList(targetNodes, encodeToP2PMessage(msg));
+    return true;
+}
+
 // send message to the given node
 bool HotStuffEngine::sendMessage(HotStuffMsg::Ptr msg, NodeID const& nodeId)
 {
@@ -433,7 +469,10 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
                              << LOG_KV("justifyView", prepareMsg->justifyView())
                              << LOG_KV("view", m_view) << LOG_KV("idx", m_idx);
     prepareMsg->setBlock(block);
+#if 0
     broadCastMsg(prepareMsg);
+    deliverMessage(prepareMsg);
+#endif
 
     Guard l(m_mutex);
     // handle the prepareMsg
@@ -542,8 +581,11 @@ QuorumCert::Ptr HotStuffEngine::checkAndGenerateQC(
             m_keyPair, packetType, m_idx, voteMsg->blockHash(), voteMsg->blockHeight(), m_view);
 
         m_hotStuffMsgCache->setSigList(QCMsg);
-        // broadcast message to the replias
+// broadcast message to the replias
+#if 0
         broadCastMsg(QCMsg);
+#endif
+        deliverMessage(QCMsg);
         return QCMsg;
     }
     return nullptr;
@@ -611,6 +653,7 @@ bool HotStuffEngine::isValidHotStuffMsg(HotStuffMsg::Ptr hotstuffMsg)
  */
 bool HotStuffEngine::handlePrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
 {
+    deliverMessage(prepareMsg);
     if (!isValidPrepareMsg(prepareMsg))
     {
         return false;
@@ -754,6 +797,7 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
  */
 bool HotStuffEngine::onReceivePrepareQCMsg(QuorumCert::Ptr prepareQC)
 {
+    deliverMessage(prepareQC);
     return onReceiveQCMsg(prepareQC, HotStuffPacketType::PrecommitVotePacket);
 }
 
@@ -883,6 +927,7 @@ bool HotStuffEngine::onReceiveQCMsg(QuorumCert::Ptr QCMsg, int const packetType)
 
 bool HotStuffEngine::onReceivePrecommitQCMsg(QuorumCert::Ptr preCommitQC)
 {
+    deliverMessage(preCommitQC);
     return onReceiveQCMsg(preCommitQC, HotStuffPacketType::CommitVotePacket);
 }
 
@@ -988,6 +1033,7 @@ bool HotStuffEngine::tryToCommitBlock()
 
 bool HotStuffEngine::onReceiveCommitQCMsg(QuorumCert::Ptr commitQC)
 {
+    deliverMessage(commitQC);
     return onReceiveQCMsg(commitQC, HotStuffPacketType::DecideVotePacket);
 }
 

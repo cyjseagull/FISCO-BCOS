@@ -144,6 +144,9 @@ protected:
     // broadcast message(used by the leader)
     virtual bool broadCastMsg(HotStuffMsg::Ptr msg,
         std::function<bool(dev::network::NodeID const&)> const& filter = nullptr);
+
+    virtual bool deliverMessage(HotStuffMsg::Ptr msg);
+
     // sendMessage(used by the replias)
     virtual bool sendMessage(HotStuffMsg::Ptr msg, dev::network::NodeID const& nodeId);
     virtual bool sendMessageToLeader(HotStuffMsg::Ptr msg);
