@@ -211,9 +211,11 @@ public:
         // the parentNode exists in the peer list
         if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
         {
+#if 0
             ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
                                   << LOG_KV("chosedParentNode", selectedNode.abridged())
                                   << LOG_KV("chosedIdx", parentIdx);
+#endif
             nodeList.push_back(selectedNode);
         }
         // the parentNode doesn't exist in the peer list
@@ -224,9 +226,11 @@ public:
                 parentIdx = (parentIdx - 1) / m_broadcastNodes;
                 if (getNodeIDByIndex(selectedNode, parentIdx) && peers.count(selectedNode))
                 {
+#if 0
                     ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler")
                                           << LOG_KV("chosedParentNode", selectedNode.abridged())
                                           << LOG_KV("chosedIdx", parentIdx);
+#endif
                     nodeList.push_back(selectedNode);
                     break;
                 }
@@ -250,9 +254,11 @@ public:
             // the expectedNode existed in the peers
             if (getNodeIDByIndex(selectedNode, expectedIdx) && peers.count(selectedNode))
             {
+#if 0
                 ENGINE_LOG(DEBUG) << LOG_DESC("NodeIdFilterHandler:RecursiveFilterChildNode")
                                       << LOG_KV("chosedNode", selectedNode.abridged())
                                       << LOG_KV("chosedIdx", expectedIdx);
+#endif
                 nodeList.push_back(selectedNode);
             }
             // selected the child

@@ -321,6 +321,7 @@ void HotStuffEngine::triggerNextView()
         curPrepareQC = m_hotStuffMsgFactory->buildQuorumCert(m_keyPair, packetType, m_idx,
             m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_view);
     }
+    m_timeManager->m_lastConsensusTime = utcTime();
     auto newViewMessage = m_hotStuffMsgFactory->buildHotStuffNewViewMsg(m_keyPair, m_idx,
         m_highestBlockHeader.hash(), m_highestBlockHeader.number(), m_toView, curPrepareQC);
     HOTSTUFFENGINE_LOG(DEBUG) << LOG_DESC("triggerNextView: send NewViewMessage to the leader")
@@ -333,10 +334,7 @@ void HotStuffEngine::triggerNextView()
                               << LOG_KV("justifyView", newViewMessage->justifyView())
                               << LOG_KV("idx", nodeIdx());
     m_hotStuffMsgCache->addNewViewCache(newViewMessage);
-    if (newViewMessage->blockHeight() == m_highestBlockHeader.number())
-    {
-        triggerGeneratePrepare();
-    }
+    triggerGeneratePrepare();
     // send New-View message to the leader
     sendMessageToLeader(newViewMessage);
 }
@@ -397,14 +395,8 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
                              << LOG_KV("view", newViewMsg->view())
                              << LOG_KV("justifyView", newViewMsg->justifyView())
                              << LOG_KV("nodeIdx", nodeIdx());
-    // if (m_hotStuffMsgCache->getNewViewCacheSize(newViewMsg->view()) < (size_t)(minValidNodes() -
-    // 1))
-    //{
     m_hotStuffMsgCache->addNewViewCache(newViewMsg);
-    if (newViewMsg->blockHeight() == m_highestBlockHeader.number())
-    {
-        triggerGeneratePrepare();
-    }
+    triggerGeneratePrepare();
     //}
     return true;
 }
@@ -412,7 +404,8 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
 void HotStuffEngine::triggerGeneratePrepare()
 {
     // collect enough new-view message, notify PBFTSealer to generate the prepare message
-    auto newViewCacheSize = m_hotStuffMsgCache->getNewViewCacheSize(m_toView);
+    auto newViewCacheSize =
+        m_hotStuffMsgCache->getNewViewCacheSize(m_highestBlockHeader.number(), m_toView);
     if (newViewCacheSize >= minValidNodes())
     {
         HOTSTUFFENGINE_LOG(INFO)
@@ -423,7 +416,7 @@ void HotStuffEngine::triggerGeneratePrepare()
             << LOG_KV("newViewSize", newViewCacheSize) << LOG_KV("idx", nodeIdx());
         resetView(m_toView);
         // obtain the max justify view
-        m_justifyQC = m_hotStuffMsgCache->getHighJustifyQC(m_toView);
+        m_justifyQC = m_hotStuffMsgCache->getHighJustifyQC(m_highestBlockHeader.number(), m_toView);
         HOTSTUFFENGINE_LOG(INFO) << LOG_DESC(
                                         "reset view to toView after collect most new-view requests")
                                  << LOG_KV("updatedView", m_view) << LOG_KV("idx", nodeIdx());
@@ -445,13 +438,12 @@ bool HotStuffEngine::omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg)
                                  << LOG_KV("height", prepareMsg->blockHeight())
                                  << LOG_KV("view", prepareMsg->view())
                                  << LOG_KV("idx", prepareMsg->idx());
-        // update the consensus time
-        m_timeManager->m_lastConsensusTime = utcTime();
         // update changeCycle
         m_timeManager->m_changeCycle = 0;
         m_hotStuffMsgCache->resetCacheAfterCommit(
             m_hotStuffMsgCache->executedPrepareCache()->blockHash());
-        m_hotStuffMsgCache->removeInvalidViewChange(m_view);
+        m_hotStuffMsgCache->removeInvalidViewChange(m_highestBlockHeader.number(), m_view);
+        m_toView += 1;
         // trigger next view
         triggerNextView();
         return true;
@@ -465,7 +457,7 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
     m_canGeneratePrepare(false);
     HotStuffPrepareMsg::Ptr prepareMsg = m_hotStuffMsgFactory->buildHotStuffPrepare(m_keyPair,
         m_idx, block->blockHeader().hash(), block->blockHeader().number(), m_view, m_justifyQC);
-    m_hotStuffMsgCache->clearNextViewCache(m_view);
+    m_hotStuffMsgCache->removeInvalidViewChange(m_highestBlockHeader.number(), m_view);
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("generateAndBroadcastPrepare")
                              << LOG_KV("rawPrepareHash", block->blockHeader().hash().abridged())
                              << LOG_KV("blockHeight", block->blockHeader().number())
@@ -481,7 +473,7 @@ void HotStuffEngine::generateAndBroadcastPrepare(std::shared_ptr<dev::eth::Block
     // handle the prepareMsg
     handlePrepareMsg(prepareMsg);
     // clear the new view cache
-    m_hotStuffMsgCache->removeInvalidViewChange(m_view);
+    m_hotStuffMsgCache->removeInvalidViewChange(m_highestBlockHeader.number(), m_view);
 }
 
 HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPrepareMsg)
@@ -506,16 +498,19 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
         executeSealing->block->blockHeader().parentHash() != curLockedQC->blockHash() &&
         rawPrepareMsg->justifyView() <= curLockedQC->view())
     {
-        HOTSTUFFENGINE_LOG(WARNING) << LOG_DESC("InvalidPrepareMsg: safeNode check failed")
-                                    << LOG_KV("reqHash", rawPrepareMsg->blockHash().abridged())
-                                    << LOG_KV("reqIdx", rawPrepareMsg->idx())
-                                    << LOG_KV("reqHeight", rawPrepareMsg->blockHeight())
-                                    << LOG_KV("justifyView", rawPrepareMsg->justifyView())
-                                    << LOG_KV("curBlk", m_highestBlockHeader.number())
-                                    << LOG_KV("lockedQCHash", curLockedQC->blockHash().abridged())
-                                    << LOG_KV("lockedQCView", curLockedQC->view())
-                                    << LOG_KV("curView", m_view) << LOG_KV("idx", nodeIdx());
-        BOOST_THROW_EXCEPTION(SafteNodeCheckFailed() << errinfo_comment("safeNode check failed"));
+        HOTSTUFFENGINE_LOG(WARNING)
+            << LOG_DESC("InvalidPrepareMsg: safeNode check failed")
+            << LOG_KV("reqHash", rawPrepareMsg->blockHash().abridged())
+            << LOG_KV("reqIdx", rawPrepareMsg->idx())
+            << LOG_KV("reqHeight", rawPrepareMsg->blockHeight())
+            << LOG_KV("justifyView", rawPrepareMsg->justifyView())
+            << LOG_KV("curBlk", m_highestBlockHeader.number())
+            << LOG_KV("lockedQCHash", curLockedQC->blockHash().abridged())
+            << LOG_KV("parentHash", executeSealing->block->blockHeader().parentHash().abridged())
+            << LOG_KV("lockedQCView", curLockedQC->view())
+            << LOG_KV("justifyView", rawPrepareMsg->justifyView()) << LOG_KV("curView", m_view)
+            << LOG_KV("idx", nodeIdx());
+        BOOST_THROW_EXCEPTION(SafeNodeCheckFailed() << errinfo_comment("safeNode check failed"));
     }
     checkBlockValid(*executeSealing->block);
     // set sender for prepareMsg
@@ -526,12 +521,12 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
         std::make_shared<HotStuffPrepareMsg>(m_keyPair, executeSealing, rawPrepareMsg);
     auto execTime = utcTime() - startT;
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("execBlock")
-                             << LOG_KV("rawPrepareHash", rawPrepareMsg->blockHash())
-                             << LOG_KV("executedHash", executedPrepare->blockHash())
+                             << LOG_KV("rawPrepareHash", rawPrepareMsg->blockHash().abridged())
+                             << LOG_KV("executedHash", executedPrepare->blockHash().abridged())
                              << LOG_KV("blkNum", executedPrepare->getBlock()->header().number())
                              << LOG_KV(
                                     "transNum", executedPrepare->getBlock()->getTransactionSize())
-                             << LOG_KV("reqIdx", executedPrepare->idx())
+                             << LOG_KV("reqIdx", executedPrepare->idx()) << LOG_KV("curBlock", )
                              << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("execTime", execTime);
     m_timeManager->m_lastSignTime = utcTime();
     return executedPrepare;
@@ -745,6 +740,11 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     }
     // update the view to the highest
     resetView(prepareMsg->view());
+    if (isSyncingHigherBlock(prepareMsg))
+    {
+        printHotStuffMsgInfo(prepareMsg, "InValid PrepareMsg: isSyncingHigherBlock");
+        return false;
+    }
     return true;
 }
 
@@ -777,6 +777,11 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
     {
         resetView(QCMsg->view());
         printHotStuffMsgInfo(QCMsg, "catchup the view to the QCView");
+    }
+    if (isSyncingHigherBlock(QCMsg))
+    {
+        printHotStuffMsgInfo(QCMsg, "InValid QCMsg: isSyncingHigherBlock");
+        return false;
     }
     // require to be from the leader
     if (getLeader(QCMsg->view()) != QCMsg->idx())
@@ -1008,9 +1013,11 @@ bool HotStuffEngine::tryToCommitBlock()
     m_hotStuffMsgCache->executedPrepareCache()->getBlock()->setSigList(
         m_hotStuffMsgCache->lockedQC()->blockSigList());
 
+    auto startT = utcTime();
     CommitResult ret =
         m_blockChain->commitBlock(m_hotStuffMsgCache->executedPrepareCache()->getBlock(),
             m_hotStuffMsgCache->executedPrepareCache()->getExecContext());
+    auto commitT = utcTime();
     if (CommitResult::OK == ret)
     {
         dropHandledTransactions(*m_hotStuffMsgCache->executedPrepareCache()->getBlock());
@@ -1021,11 +1028,17 @@ bool HotStuffEngine::tryToCommitBlock()
             << LOG_KV("prepHeight", m_hotStuffMsgCache->executedPrepareCache()->blockHeight())
             << LOG_KV("prepIdx", m_hotStuffMsgCache->executedPrepareCache()->idx())
             << LOG_KV("hash", m_hotStuffMsgCache->executedPrepareCache()->blockHash().abridged())
-            << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
+            << LOG_KV("commitTimeCost", commitT - startT)
+            << LOG_KV("dropTimeCost", utcTime() - commitT) << LOG_KV("nodeIdx", nodeIdx())
+            << LOG_KV("myNode", m_keyPair.pub().abridged());
         // delete the cache
+        // remove futureCache
+        m_hotStuffMsgCache->eraseFuturePrepare(
+            m_hotStuffMsgCache->executedPrepareCache()->blockHeight());
         m_hotStuffMsgCache->resetCacheAfterCommit(
             m_hotStuffMsgCache->executedPrepareCache()->blockHash());
-        m_hotStuffMsgCache->removeInvalidViewChange(m_view);
+        m_hotStuffMsgCache->removeInvalidViewChange(m_highestBlockHeader.number(), m_view);
+        m_toView += 1;
         return true;
     }
     else
@@ -1061,7 +1074,8 @@ void HotStuffEngine::reportBlock(dev::eth::Block const& block)
     {
         m_highestBlockHeader = block.blockHeader();
         m_hotStuffMsgCache->resetCacheAfterCommit(block.blockHeader().hash());
-        m_hotStuffMsgCache->removeInvalidViewChange(m_view);
+        m_hotStuffMsgCache->removeInvalidViewChange(m_highestBlockHeader.number(), m_view);
+        m_hotStuffMsgCache->eraseFuturePrepare(m_highestBlockHeader.number());
         if (m_highestBlockHeader.number() >= m_consensusBlockNumber)
         {
             m_consensusBlockNumber = m_highestBlockHeader.number() + 1;
@@ -1087,8 +1101,8 @@ void HotStuffEngine::checkTimeout()
         return;
     }
     m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-    m_timeManager->m_lastConsensusTime = utcTime();
     m_timeManager->m_changeCycle += 1;
+    m_toView += 1;
     triggerNextView();
     HOTSTUFFENGINE_LOG(INFO) << LOG_DESC("checkTimeout") << LOG_KV("view", m_view)
                              << LOG_KV("toView", m_toView)
@@ -1135,32 +1149,39 @@ void HotStuffEngine::handleFuturePreparePacket()
         return;
     }
     printHotStuffMsgInfo(futurePrepare, "handleFuturePreparePacket");
+    m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
     if (!handlePrepareMsg(futurePrepare))
     {
+        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        HOTSTUFFENGINE_LOG(WARNING) << LOG_DESC("handleFuturePreparePacket failed");
         return;
     }
     auto executedBlockHash = m_hotStuffMsgCache->executedPrepareCache()->blockHash();
     auto prepareQC =
         m_hotStuffMsgCache->getFutureQCMsg(HotStuffPacketType::PrepareQCPacket, executedBlockHash);
-    if (prepareQC)
+    if (!prepareQC)
     {
-        printHotStuffMsgInfo(prepareQC, "handleFuturePreparePacket: find cached future prepareQC");
-        onReceivePrepareQCMsg(prepareQC);
+        return;
     }
+    printHotStuffMsgInfo(prepareQC, "handleFuturePreparePacket: find cached future prepareQC");
+    onReceivePrepareQCMsg(prepareQC);
+
     auto lockedQC = m_hotStuffMsgCache->getFutureQCMsg(
         HotStuffPacketType::PrecommitQCPacket, executedBlockHash);
-    if (lockedQC)
+    if (!lockedQC)
     {
-        printHotStuffMsgInfo(lockedQC, "handleFuturePreparePacket: find cached future lockedQC");
-        onReceivePrecommitQCMsg(lockedQC);
+        return;
     }
-    auto commitQC = m_hotStuffMsgCache->getFutureQCMsg(
-        HotStuffPacketType::CommitQCPacket, futurePrepare->blockHash());
-    if (commitQC)
+    printHotStuffMsgInfo(lockedQC, "handleFuturePreparePacket: find cached future lockedQC");
+    onReceivePrecommitQCMsg(lockedQC);
+
+    auto commitQC =
+        m_hotStuffMsgCache->getFutureQCMsg(HotStuffPacketType::CommitQCPacket, executedBlockHash);
+    if (!commitQC)
     {
-        printHotStuffMsgInfo(commitQC, "handleFuturePreparePacket: find cached future commitQC");
-        onReceiveCommitQCMsg(commitQC);
+        return;
     }
-    m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
-    m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+    printHotStuffMsgInfo(commitQC, "handleFuturePreparePacket: find cached future commitQC");
+    onReceiveCommitQCMsg(commitQC);
+    m_blockSync->noteSealingBlockNumber(m_consensusBlockNumber);
 }

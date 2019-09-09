@@ -34,6 +34,8 @@ class HotStuffMsgCache
 {
 public:
     using Ptr = std::shared_ptr<HotStuffMsgCache>;
+    using ViewCacheType =
+        std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, HotStuffNewViewMsg::Ptr>>;
 
     HotStuffMsgCache() = default;
     ~HotStuffMsgCache() {}
@@ -61,7 +63,7 @@ public:
     void addCommitCache(HotStuffMsg::Ptr msg);
 
     // get cache size
-    size_t getNewViewCacheSize(VIEWTYPE const& view);
+    size_t getNewViewCacheSize(dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view);
     size_t getPrepareCacheSize(h256 const& blockHash);
     size_t getPreCommitCacheSize(h256 const& blockHash);
     size_t getCommitCacheSize(h256 const& blockHash);
@@ -71,7 +73,7 @@ public:
 
     HotStuffPrepareMsg::Ptr executedPrepareCache() { return m_executedPrepareCache; }
 
-    void removeInvalidViewChange(VIEWTYPE const& view);
+    void removeInvalidViewChange(ViewCacheType& viewCache, VIEWTYPE const& view);
 
     void setPrepareQC(QuorumCert::Ptr _prepareQC) { m_prepareQC = _prepareQC; }
 
@@ -79,7 +81,8 @@ public:
 
     QuorumCert::Ptr lockedQC() { return m_lockedQC; }
 
-    QuorumCert::Ptr getHighJustifyQC(VIEWTYPE const& curView);
+    QuorumCert::Ptr getHighJustifyQC(
+        dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& curView);
 
     // collect cache periodly
     virtual void collectCache(dev::eth::BlockHeader const& highestBlockHeader);
@@ -92,7 +95,21 @@ public:
     void clearPreCommitCache(h256 const& blockHash) { clearCache(m_preCommitCache, blockHash); }
 
     void clearCommitCache(h256 const& blockHash) { clearCache(m_commitCache, blockHash); }
-    void clearNextViewCache(VIEWTYPE const& view) { clearCache(m_newViewCache, view); }
+    void removeInvalidViewChange(dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view)
+    {
+        for (auto it = m_newViewCache.begin(); it != m_newViewCache.end();)
+        {
+            if (it->first < blockNumber)
+            {
+                it = m_newViewCache.erase(it);
+            }
+            else
+            {
+                removeInvalidViewChange(it->second, view);
+                it++;
+            }
+        }
+    }
 
     void addFutureQC(QuorumCert::Ptr qcMsg);
     QuorumCert::Ptr getFutureQCMsg(int msgType, h256 const& blockHash);
@@ -177,22 +194,6 @@ protected:
         }
     }
 
-    // remove invalid future prepare
-    void removeInvalidFuturePrepare(dev::eth::BlockHeader const& highestBlockHeader)
-    {
-        for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
-        {
-            if (it->second->blockHeight() <= highestBlockHeader.number())
-            {
-                it = m_futurePrepareCache.erase(it);
-            }
-            else
-            {
-                it++;
-            }
-        }
-    }
-
 private:
     HotStuffPrepareMsg::Ptr m_executedPrepareCache = nullptr;
     HotStuffPrepareMsg::Ptr m_rawPrepareCache = nullptr;
@@ -201,8 +202,7 @@ private:
     QuorumCert::Ptr m_commitQC = nullptr;
 
 
-    std::unordered_map<VIEWTYPE, std::unordered_map<IDXTYPE, HotStuffNewViewMsg::Ptr>>
-        m_newViewCache;
+    std::unordered_map<dev::eth::BlockNumber, ViewCacheType> m_newViewCache;
 
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_prepareCache;
     std::unordered_map<h256, std::unordered_map<std::string, HotStuffMsg::Ptr>> m_preCommitCache;

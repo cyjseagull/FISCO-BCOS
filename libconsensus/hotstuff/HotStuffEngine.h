@@ -204,6 +204,16 @@ protected:
         m_broadcastCache[nodeId][packetType].insert(key);
     }
 
+    inline bool isSyncingHigherBlock(std::shared_ptr<T> req) const
+    {
+        if (m_blockSync->isSyncing() &&
+            req->blockHeight() <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
+
 protected:
     // the highest blockHeader
     dev::eth::BlockHeader m_highestBlockHeader;

@@ -102,12 +102,12 @@ void HotStuffMsgCache::addLockedQC(QuorumCert::Ptr msg)
 
 void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg)
 {
-    auto cacheSize = getNewViewCacheSize(msg->view());
+    auto cacheSize = getNewViewCacheSize(msg->blockHeight(), msg->view());
     HOTSTUFFCache_LOG(DEBUG) << LOG_DESC("addNewViewCache")
                              << LOG_KV("hash", msg->blockHash().abridged())
                              << LOG_KV("height", msg->blockHeight()) << LOG_KV("view", msg->view())
                              << LOG_KV("cacheSize", (cacheSize)) << LOG_KV("reqIdx", msg->idx());
-    m_newViewCache[msg->view()][msg->idx()] = msg;
+    m_newViewCache[msg->blockHeight()][msg->view()][msg->idx()] = msg;
 }
 
 void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg)
@@ -144,9 +144,18 @@ void HotStuffMsgCache::addCommitCache(HotStuffMsg::Ptr msg)
 }
 
 
-size_t HotStuffMsgCache::getNewViewCacheSize(VIEWTYPE const& view)
+size_t HotStuffMsgCache::getNewViewCacheSize(
+    dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view)
 {
-    return getCollectedMsgSize(m_newViewCache, view);
+    if (!m_newViewCache.count(blockNumber))
+    {
+        return 0;
+    }
+    if (!m_newViewCache[blockNumber].count(view))
+    {
+        return 0;
+    }
+    return m_newViewCache[blockNumber][view].size();
 }
 
 size_t HotStuffMsgCache::getPrepareCacheSize(h256 const& blockHash)
@@ -196,13 +205,13 @@ void HotStuffMsgCache::resetCacheAfterCommit(h256 const& blockHash)
     m_commitQC.reset();
 }
 
-void HotStuffMsgCache::removeInvalidViewChange(VIEWTYPE const& view)
+void HotStuffMsgCache::removeInvalidViewChange(ViewCacheType& viewCache, VIEWTYPE const& view)
 {
-    for (auto it = m_newViewCache.begin(); it != m_newViewCache.end();)
+    for (auto it = viewCache.begin(); it != viewCache.end();)
     {
         if (it->first <= view)
         {
-            it = m_newViewCache.erase(it);
+            it = viewCache.erase(it);
         }
         else
         {
@@ -212,9 +221,10 @@ void HotStuffMsgCache::removeInvalidViewChange(VIEWTYPE const& view)
 }
 
 // get the maximum prepare view
-QuorumCert::Ptr HotStuffMsgCache::getHighJustifyQC(VIEWTYPE const& curView)
+QuorumCert::Ptr HotStuffMsgCache::getHighJustifyQC(
+    dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& curView)
 {
-    if (!m_newViewCache.count(curView))
+    if (!m_newViewCache.count(blockNumber) || !m_newViewCache[blockNumber].count(curView))
     {
         HOTSTUFFCache_LOG(FATAL) << LOG_DESC(
                                         "generate prepare before collect enough NewView message")
@@ -222,7 +232,7 @@ QuorumCert::Ptr HotStuffMsgCache::getHighJustifyQC(VIEWTYPE const& curView)
     }
     QuorumCert::Ptr highQC = nullptr;
     VIEWTYPE maxView = 0;
-    for (auto const& item : m_newViewCache[curView])
+    for (auto const& item : m_newViewCache[blockNumber][curView])
     {
         if (maxView == 0 || maxView < item.second->justifyView())
         {
@@ -267,9 +277,16 @@ void HotStuffMsgCache::addFuturePrepare(HotStuffPrepareMsg::Ptr futurePrepareMsg
 
 void HotStuffMsgCache::eraseFuturePrepare(dev::eth::BlockNumber const& blockNumber)
 {
-    if (m_futurePrepareCache.count(blockNumber))
+    for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
     {
-        m_futurePrepareCache.erase(blockNumber);
+        if (it->second == nullptr || it->second->blockHeight() <= blockNumber.number())
+        {
+            it = m_futurePrepareCache.erase(it);
+        }
+        else
+        {
+            it++;
+        }
     }
 }
 
@@ -314,5 +331,5 @@ void HotStuffMsgCache::collectCache(dev::eth::BlockHeader const& highestBlockHea
     removeInvalidEntryFromCache(highestBlockHeader, m_prepareCache);
     removeInvalidEntryFromCache(highestBlockHeader, m_preCommitCache);
     removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
-    removeInvalidFuturePrepare(highestBlockHeader);
+    eraseFuturePrepare(highestBlockHeader.number());
 }
