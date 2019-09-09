@@ -75,6 +75,14 @@ dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(
 void ConsensusEngineBase::checkBlockValid(Block const& block)
 {
     h256 block_hash = block.blockHeader().hash();
+    if(isSyncingHigherBlock(block.blockHeader().number()))
+    {
+        ENGINE_LOG(DEBUG) << LOG_DESC("checkBlockValid: isSyncingHigherBlock")
+                          << LOG_KV("blkNumber", block.blockHeader().number())
+                          << LOG_KV("highestBlk",  m_blockSync->status().knownHighestNumber)
+                          << LOG_KV("idx", nodeIdx());
+        BOOST_THROW_EXCEPTION(SyncingHigherBlock() << errinfo_comment("isSyncingHigherBlock"));
+    }
     /// check transaction num
     if (block.getTransactionSize() > maxBlockTransactions())
     {

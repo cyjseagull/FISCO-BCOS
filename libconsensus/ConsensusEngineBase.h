@@ -269,6 +269,16 @@ public:
         }
     }
 
+    virtual bool isSyncingHigherBlock(dev::eth::BlockNumber blkNum) const
+    {
+        if (m_blockSync->isSyncing() &&
+            blkNum <= m_blockSync->status().knownHighestNumber)
+        {
+            return true;
+        }
+        return false;
+    }
+
 protected:
     virtual void resetConfig();
     void dropHandledTransactions(dev::eth::Block const& block) { m_txPool->dropBlockTrans(block); }

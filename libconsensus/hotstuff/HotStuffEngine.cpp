@@ -744,7 +744,7 @@ bool HotStuffEngine::isValidPrepareMsg(HotStuffPrepareMsg::Ptr prepareMsg)
     }
     // update the view to the highest
     resetView(prepareMsg->view());
-    if (isSyncingHigherBlock(prepareMsg))
+    if (isSyncingHigherBlock(prepareMsg->blockHeight()))
     {
         printHotStuffMsgInfo(prepareMsg, "InValid PrepareMsg: isSyncingHigherBlock");
         return false;
@@ -776,13 +776,15 @@ bool HotStuffEngine::checkQCMsg(QuorumCert::Ptr QCMsg)
         printHotStuffMsgInfo(QCMsg, "Invalid QCMsg: has consensused", WARNING);
         return false;
     }
+#if 0
     // catchup the view after block sync
     if (QCMsg->view() > m_view && QCMsg->blockHeight() >= m_highestBlockHeader.number())
     {
         resetView(QCMsg->view());
         printHotStuffMsgInfo(QCMsg, "catchup the view to the QCView");
     }
-    if (isSyncingHigherBlock(QCMsg))
+#endif
+    if (isSyncingHigherBlock(QCMsg->blockHeight()))
     {
         printHotStuffMsgInfo(QCMsg, "InValid QCMsg: isSyncingHigherBlock");
         return false;
