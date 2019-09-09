@@ -527,6 +527,7 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
     }
     checkBlockValid(*executeSealing->block);
     // set sender for prepareMsg
+    m_blockSync->noteSealingBlockNumber(m_consensusBlockNumber);
     m_txPool->verifyAndSetSenderForBlock(*executeSealing->block);
     // executeBlock
     executeSealing->p_execContext = executeBlock(executeSealing->block);
@@ -1159,13 +1160,13 @@ bool HotStuffEngine::handleFuturePreparePacket()
 {
     Guard l(m_mutex);
     auto futurePrepare = m_hotStuffMsgCache->findFuturePrepareMsg(m_consensusBlockNumber);
+    // no future prepare request founded
     if (!futurePrepare || futurePrepare->view() < m_view)
     {
-        return false;
+        return true;
     }
     printHotStuffMsgInfo(futurePrepare, "handleFuturePreparePacket");
     m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
-    m_blockSync->noteSealingBlockNumber(m_consensusBlockNumber);
     if (!handlePrepareMsg(futurePrepare))
     {
         HOTSTUFFENGINE_LOG(WARNING) << LOG_DESC("handleFuturePreparePacket failed");
