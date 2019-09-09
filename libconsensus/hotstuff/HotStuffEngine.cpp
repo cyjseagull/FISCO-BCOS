@@ -236,7 +236,12 @@ bool HotStuffEngine::deliverMessage(HotStuffMsg::Ptr msg)
     }
     auto selectedNodes = NodeIdFilterHandler(peers);
     NodeIDs targetNodes;
-    broadcastMark(msg->idx(), msg->type(), msg->uniqueKey());
+    NodeID sourceID;
+    if (!getNodeIDByIndex(sourceID, msg->idx()))
+    {
+        return false;
+    }
+    broadcastMark(sourceID, msg->type(), msg->uniqueKey());
     for (auto const& nodeId : selectedNodes)
     {
         /// packet has been broadcasted?
@@ -313,7 +318,6 @@ bool HotStuffEngine::sendMessageToLeader(HotStuffMsg::Ptr msg)
 // send Next-View message to the leader when timeout
 void HotStuffEngine::triggerNextView()
 {
-    m_toView += 1;
     auto curPrepareQC = m_hotStuffMsgCache->prepareQC();
     if (!curPrepareQC)
     {
@@ -526,7 +530,7 @@ HotStuffPrepareMsg::Ptr HotStuffEngine::execBlock(HotStuffPrepareMsg::Ptr rawPre
                              << LOG_KV("blkNum", executedPrepare->getBlock()->header().number())
                              << LOG_KV(
                                     "transNum", executedPrepare->getBlock()->getTransactionSize())
-                             << LOG_KV("reqIdx", executedPrepare->idx()) << LOG_KV("curBlock", )
+                             << LOG_KV("reqIdx", executedPrepare->idx())
                              << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("execTime", execTime);
     m_timeManager->m_lastSignTime = utcTime();
     return executedPrepare;

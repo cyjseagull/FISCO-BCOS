@@ -145,16 +145,17 @@ void SyncMaster::doWork()
     record_time = utcTime();
 
     auto maintainTransactions_time_cost = 0;
+    // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
+    if (m_needMaintainTransactions && m_newTransactions)
+    {
+        maintainTransactions();
+    }
+    maintainTransactions_time_cost = utcTime() - record_time;
+
     auto maintainBlockRequest_time_cost = 0;
     // Idle do
     if (!isSyncing())
     {
-        // cout << "SyncMaster " << m_protocolId << " doWork()" << endl;
-        if (m_needMaintainTransactions && m_newTransactions)
-        {
-            maintainTransactions();
-        }
-        maintainTransactions_time_cost = utcTime() - record_time;
         record_time = utcTime();
 
         maintainBlockRequest();

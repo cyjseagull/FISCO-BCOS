@@ -28,6 +28,7 @@
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libconsensus/TimeManager.h>
 #include <libdevcore/concurrent_queue.h>
+#include <libsync/SyncStatus.h>
 #include <tbb/concurrent_queue.h>
 namespace dev
 {
@@ -204,6 +205,7 @@ protected:
         m_broadcastCache[nodeId][packetType].insert(key);
     }
 
+    template <typename T>
     inline bool isSyncingHigherBlock(std::shared_ptr<T> req) const
     {
         if (m_blockSync->isSyncing() &&

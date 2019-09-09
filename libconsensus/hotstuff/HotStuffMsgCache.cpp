@@ -279,7 +279,7 @@ void HotStuffMsgCache::eraseFuturePrepare(dev::eth::BlockNumber const& blockNumb
 {
     for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
     {
-        if (it->second == nullptr || it->second->blockHeight() <= blockNumber.number())
+        if (it->second == nullptr || it->second->blockHeight() <= blockNumber)
         {
             it = m_futurePrepareCache.erase(it);
         }
