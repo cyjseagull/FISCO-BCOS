@@ -410,6 +410,12 @@ bool HotStuffEngine::handleNewViewMsg(HotStuffNewViewMsg::Ptr newViewMsg)
 
 void HotStuffEngine::triggerGeneratePrepare()
 {
+    VIEWTYPE toView;
+    if (m_hotStuffMsgCache->needTriggerViewChange(
+            m_highestBlockHeader.number(), m_toView, minValidNodes(), toView))
+    {
+        resetView(toView);
+    }
     // collect enough new-view message, notify PBFTSealer to generate the prepare message
     auto newViewCacheSize =
         m_hotStuffMsgCache->getNewViewCacheSize(m_highestBlockHeader.number(), m_toView);
@@ -1192,5 +1198,5 @@ bool HotStuffEngine::handleFuturePreparePacket()
     }
     printHotStuffMsgInfo(commitQC, "handleFuturePreparePacket: find cached future commitQC");
     onReceiveCommitQCMsg(commitQC);
-    m_blockSync->noteSealingBlockNumber(m_consensusBlockNumber);
+    return true;
 }

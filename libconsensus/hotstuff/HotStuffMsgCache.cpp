@@ -110,6 +110,26 @@ void HotStuffMsgCache::addNewViewCache(HotStuffNewViewMsg::Ptr msg)
     m_newViewCache[msg->blockHeight()][msg->view()][msg->idx()] = msg;
 }
 
+bool HotStuffMsgCache::needTriggerViewChange(dev::eth::BlockNumber const& blockNumber,
+    VIEWTYPE const& view, size_t const& minValidNodes, VIEWTYPE& toView)
+{
+    toView = view;
+    bool canTriggerViewChange = false;
+    if (!m_newViewCache.count(blockNumber))
+    {
+        return false;
+    }
+    for (auto const& it : m_newViewCache[blockNumber])
+    {
+        if (it.first >= toView && it.second.size() >= minValidNodes)
+        {
+            toView = it.first;
+            canTriggerViewChange = true;
+        }
+    }
+    return canTriggerViewChange;
+}
+
 void HotStuffMsgCache::addPrepareCache(HotStuffMsg::Ptr msg)
 {
     auto cacheSize = getPrepareCacheSize(msg->blockHash());
@@ -209,7 +229,7 @@ void HotStuffMsgCache::removeInvalidViewChange(ViewCacheType& viewCache, VIEWTYP
 {
     for (auto it = viewCache.begin(); it != viewCache.end();)
     {
-        if (it->first <= view)
+        if (it->first < view)
         {
             it = viewCache.erase(it);
         }

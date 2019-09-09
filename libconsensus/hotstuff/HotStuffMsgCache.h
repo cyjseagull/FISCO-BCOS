@@ -64,6 +64,10 @@ public:
 
     // get cache size
     size_t getNewViewCacheSize(dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view);
+    // need trigger viewChange
+    bool needTriggerViewChange(dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view,
+        size_t const& minValidNodes, VIEWTYPE& toView);
+
     size_t getPrepareCacheSize(h256 const& blockHash);
     size_t getPreCommitCacheSize(h256 const& blockHash);
     size_t getCommitCacheSize(h256 const& blockHash);
