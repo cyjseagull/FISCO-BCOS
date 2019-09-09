@@ -99,7 +99,7 @@ public:
     {
         for (auto it = m_newViewCache.begin(); it != m_newViewCache.end();)
         {
-            if (0 >= blockNumber && it->first < (blockNumber - 1))
+            if (blockNumber >= 0 && it->first < (blockNumber - 1))
             {
                 it = m_newViewCache.erase(it);
             }
