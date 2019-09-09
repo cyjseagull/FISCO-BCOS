@@ -146,7 +146,10 @@ void HotStuffEngine::workLoop()
                 m_signalled.wait_for(l, std::chrono::milliseconds(5));
             }
             checkTimeout();
-            handleFuturePreparePacket();
+            if (!handleFuturePreparePacket())
+            {
+                m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+            }
             collectGarbage();
         }
         catch (std::exception& _e)
@@ -1146,28 +1149,28 @@ void HotStuffEngine::collectGarbage()
     }
 }
 
-void HotStuffEngine::handleFuturePreparePacket()
+bool HotStuffEngine::handleFuturePreparePacket()
 {
     Guard l(m_mutex);
     auto futurePrepare = m_hotStuffMsgCache->findFuturePrepareMsg(m_consensusBlockNumber);
     if (!futurePrepare || futurePrepare->view() < m_view)
     {
-        return;
+        return false;
     }
     printHotStuffMsgInfo(futurePrepare, "handleFuturePreparePacket");
     m_hotStuffMsgCache->eraseFuturePrepare(m_consensusBlockNumber);
+    m_blockSync->noteSealingBlockNumber(m_consensusBlockNumber);
     if (!handlePrepareMsg(futurePrepare))
     {
-        m_blockSync->noteSealingBlockNumber(m_blockChain->number());
         HOTSTUFFENGINE_LOG(WARNING) << LOG_DESC("handleFuturePreparePacket failed");
-        return;
+        return false;
     }
     auto executedBlockHash = m_hotStuffMsgCache->executedPrepareCache()->blockHash();
     auto prepareQC =
         m_hotStuffMsgCache->getFutureQCMsg(HotStuffPacketType::PrepareQCPacket, executedBlockHash);
     if (!prepareQC)
     {
-        return;
+        return false;
     }
     printHotStuffMsgInfo(prepareQC, "handleFuturePreparePacket: find cached future prepareQC");
     onReceivePrepareQCMsg(prepareQC);
@@ -1176,7 +1179,7 @@ void HotStuffEngine::handleFuturePreparePacket()
         HotStuffPacketType::PrecommitQCPacket, executedBlockHash);
     if (!lockedQC)
     {
-        return;
+        return false;
     }
     printHotStuffMsgInfo(lockedQC, "handleFuturePreparePacket: find cached future lockedQC");
     onReceivePrecommitQCMsg(lockedQC);
@@ -1185,7 +1188,7 @@ void HotStuffEngine::handleFuturePreparePacket()
         m_hotStuffMsgCache->getFutureQCMsg(HotStuffPacketType::CommitQCPacket, executedBlockHash);
     if (!commitQC)
     {
-        return;
+        return false;
     }
     printHotStuffMsgInfo(commitQC, "handleFuturePreparePacket: find cached future commitQC");
     onReceiveCommitQCMsg(commitQC);

@@ -173,7 +173,7 @@ protected:
 
     virtual bool omitEmptyBlock(HotStuffPrepareMsg::Ptr prepareMsg);
 
-    virtual void handleFuturePreparePacket();
+    virtual bool handleFuturePreparePacket();
 
     bool checkSign(HotStuffMsg::Ptr hotStuffReq) const;
 
