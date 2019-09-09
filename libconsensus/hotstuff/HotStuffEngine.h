@@ -28,7 +28,6 @@
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libconsensus/TimeManager.h>
 #include <libdevcore/concurrent_queue.h>
-#include <libsync/SyncStatus.h>
 #include <tbb/concurrent_queue.h>
 namespace dev
 {

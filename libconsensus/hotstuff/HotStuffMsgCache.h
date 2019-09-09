@@ -97,10 +97,6 @@ public:
     void clearCommitCache(h256 const& blockHash) { clearCache(m_commitCache, blockHash); }
     void removeInvalidViewChange(dev::eth::BlockNumber const& blockNumber, VIEWTYPE const& view)
     {
-        if (blockNumber <= 0)
-        {
-            return;
-        }
         for (auto it = m_newViewCache.begin(); it != m_newViewCache.end();)
         {
             if (0 >= blockNumber && it->first < (blockNumber - 1))

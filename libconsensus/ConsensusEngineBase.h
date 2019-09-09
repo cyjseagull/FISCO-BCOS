@@ -34,6 +34,7 @@
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libsync/SyncInterface.h>
+#include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 
 namespace dev
@@ -271,8 +272,7 @@ public:
 
     virtual bool isSyncingHigherBlock(dev::eth::BlockNumber blkNum) const
     {
-        if (m_blockSync->isSyncing() &&
-            blkNum <= m_blockSync->status().knownHighestNumber)
+        if (m_blockSync->isSyncing() && blkNum <= m_blockSync->status().knownHighestNumber)
         {
             return true;
         }
