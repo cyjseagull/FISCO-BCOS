@@ -210,7 +210,7 @@ ImportResult TxPool::verify(Transaction& trans, IfDropped _drop_policy, bool _ne
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans.sha3();
-    if (m_txsHash.find(tx_hash) != m_txsHash.end())
+    if (m_txsHash.count(tx_hash))
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already known tx")
                           << LOG_KV("hash", tx_hash.abridged());
@@ -287,7 +287,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
     {
         // Not to use bind here, pReceipt wiil be free. So use TxCallback instead.
         // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
-        auto tx = m_blockChain->getLocalisedTxByHash(_txHash);
+        auto tx = *p_tx->second;
         TxCallback callback{p_tx->second->rpcCallback(), pReceipt};
         m_callbackPool.enqueue([callback, tx] { callback.call(callback.pReceipt, tx.data()); });
     }
@@ -303,7 +303,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool needTriggerCallback,
 bool TxPool::insert(Transaction const& _tx)
 {
     h256 tx_hash = _tx.sha3();
-    if (m_txsHash.find(tx_hash) != m_txsHash.end())
+    if (m_txsHash.count(tx_hash))
     {
         return false;
     }
@@ -322,7 +322,7 @@ bool TxPool::drop(h256 const& _txHash)
     /// drop transactions
     {
         UpgradableGuard l(m_lock);
-        if (m_txsHash.find(_txHash) == m_txsHash.end())
+        if (m_txsHash.count(_txHash))
             return false;
         UpgradeGuard ul(l);
         if (m_dropped.size() < m_limit)
@@ -395,10 +395,10 @@ bool TxPool::dropBlockTrans(Block const& block)
     /// update the nonce check related to block chain
     m_txNonceCheck->updateCache(false);
     bool ret = dropTransactions(block, true);
-    /// remove the information of known transactions from map
-    removeBlockKnowTrans(block);
     /// remove the nonce check related to txpool
     m_commonNonceCheck->delCache(block.transactions());
+    /// remove the information of known transactions from map
+    removeBlockKnowTrans(block);
     return ret;
 }
 
@@ -554,18 +554,20 @@ void TxPool::setTransactionsAreKnownBy(
 /// Is the transaction is known by someone
 bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
 {
-    auto p = m_transactionKnownBy.find(_txHash);
-    if (p == m_transactionKnownBy.end())
+    if (!m_transactionKnownBy.count(_txHash))
+    {
         return false;
-    return !p->second.empty();
+    }
+    return !m_transactionKnownBy[_txHash].size() == 0;
 }
 
 // Remove the record of transaction know by some peers
 void TxPool::removeTransactionKnowBy(h256 const& _txHash)
 {
-    auto p = m_transactionKnownBy.find(_txHash);
-    if (p != m_transactionKnownBy.end())
-        m_transactionKnownBy.erase(p);
+    if (m_transactionKnownBy.count(_txHash))
+    {
+        m_transactionKnownBy.erase(_txHash);
+    }
 }
 
 }  // namespace txpool
