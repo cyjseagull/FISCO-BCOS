@@ -36,8 +36,18 @@ void RotationPBFTEngine::resetConfig()
 
 void RotationPBFTEngine::updateConsensusList()
 {
+    int64_t blockNumber = m_blockChain->number();
+    if (m_lastGroup == -1)
+    {
+        m_lastGroup = blockNumber / m_rotationInterval;
+        if (m_lastGroup > 1)
+        {
+            m_lastGroup -= 1;
+        }
+    }
+
     // reset consensusList
-    if (m_highestBlock.number() == 0)
+    if (blockNumber == 0 && m_consensusList.size() == 0 && m_consensusIdList.size() == 0)
     {
         for (auto index = 0; index < m_groupSize; index++)
         {
@@ -49,38 +59,40 @@ void RotationPBFTEngine::updateConsensusList()
             }
         }
     }
-    if (m_highestBlock.number() / m_rotationInterval > 0 &&
-        0 == m_highestBlock.number() % m_rotationInterval)
+
+    int64_t currentGroup = blockNumber / m_rotationInterval;
+    if (currentGroup == m_lastGroup || blockNumber % m_rotationInterval != 0)
     {
-        WriteGuard l(x_consensusListMutex);
-        // get the node should be removed
-        NodeID removeNodeId;
-        size_t removeIndex = (m_highestBlock.number() / m_rotationInterval - 1) % m_groupSize;
-        if (getNodeIDByIndex(removeNodeId, removeIndex))
-        {
-            m_consensusList.erase(removeNodeId);
-            IDXTYPE index = m_consensusIdList.front();
-            assert(index == removeIndex);
-            m_consensusIdList.pop_front();
-        }
-        // insert a new node
-        NodeID insertNodeId;
-        size_t insertIndex =
-            (m_highestBlock.number() / m_rotationInterval + m_groupSize - 1) % m_groupSize;
-        if (getNodeIDByIndex(insertNodeId, insertIndex))
-        {
-            m_consensusList.insert(insertNodeId);
-            m_consensusIdList.push_back((IDXTYPE)(insertIndex));
-        }
-        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList")
-                               << LOG_KV("curNumber", m_highestBlock.number())
-                               << LOG_KV("removeIndex", removeIndex)
-                               << LOG_KV("removeNode", removeNodeId.abridged())
-                               << LOG_KV("insertIndex", insertIndex)
-                               << LOG_KV("insertNode", insertNodeId.abridged())
-                               << LOG_KV("nodeIdx", m_idx)
-                               << LOG_KV("nodeId", m_keyPair.pub().abridged());
+        return;
     }
+    WriteGuard l(x_consensusListMutex);
+    // get the node should be removed
+    NodeID removeNodeId;
+    size_t removeIndex = (currentGroup - 1) % m_nodeNum;
+    if (getNodeIDByIndex(removeNodeId, removeIndex))
+    {
+        m_consensusList.erase(removeNodeId);
+        IDXTYPE index = m_consensusIdList.front();
+        assert(index == removeIndex);
+        m_consensusIdList.pop_front();
+    }
+    // insert a new node
+    NodeID insertNodeId;
+    size_t insertIndex = (currentGroup + m_groupSize - 1) % m_nodeNum;
+    if (getNodeIDByIndex(insertNodeId, insertIndex))
+    {
+        m_consensusList.insert(insertNodeId);
+        m_consensusIdList.push_back((IDXTYPE)(insertIndex));
+    }
+    m_lastGroup = currentGroup;
+    m_leaderFailed = false;
+    RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList") << LOG_KV("curNumber", blockNumber)
+                           << LOG_KV("removeIndex", removeIndex)
+                           << LOG_KV("removeNode", removeNodeId.abridged())
+                           << LOG_KV("insertIndex", insertIndex)
+                           << LOG_KV("insertNode", insertNodeId.abridged())
+                           << LOG_KV("nodeIdx", m_idx)
+                           << LOG_KV("nodeId", m_keyPair.pub().abridged());
 }
 
 // get the currentLeader

@@ -587,7 +587,11 @@ bool PBFTEngine::checkBlock(Block const& block)
     {
         return false;
     }
-    resetConfig();
+    {
+        Guard l(m_mutex);
+        resetConfig();
+    }
+
     auto sealers = sealerList();
     /// ignore the genesis block
     if (block.blockHeader().number() == 0)

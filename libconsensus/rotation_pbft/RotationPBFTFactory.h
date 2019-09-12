@@ -32,8 +32,8 @@ namespace consensus
 class RotationPBFTFactory : public ConsensusEngineFactory
 {
 public:
-    PBFTEngineFactory() {}
-    virtual ~PBFTEngineFactory() {}
+    RotationPBFTFactory() {}
+    virtual ~RotationPBFTFactory() {}
     std::shared_ptr<ConsensusEngineBase> createConsensusEngine(
         std::shared_ptr<dev::p2p::P2PInterface> service,
         std::shared_ptr<dev::txpool::TxPoolInterface> txPool,

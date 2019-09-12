@@ -57,7 +57,7 @@ public:
 protected:
     void resetConfig() override;
     virtual void updateConsensusList();
-
+    IDXTYPE minValidNodes() const override { return m_groupSize - m_f; }
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
 
@@ -68,6 +68,8 @@ protected:
     std::atomic<int64_t> m_groupSize = {0};
     // the interval(measured by block number) to adjust the sealers
     std::atomic<int64_t> m_rotationInterval = {10};
+    std::atomic<int64_t> m_lastGroup = {-1};
+
     std::set<dev::h512> m_consensusList;
 
     mutable SharedMutex x_consensusListMutex;

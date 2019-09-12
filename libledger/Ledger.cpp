@@ -560,30 +560,22 @@ std::shared_ptr<ConsensusEngineFactory> Ledger::createPBFTEngineFactory()
 
 std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
-    {
-        return std::make_shared<PBFTReqFactory>();
-    }
-    else if (dev::stringCmpIgnoreCase(
+    if (dev::stringCmpIgnoreCase(
                  m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         return std::make_shared<GroupPBFTReqFactory>();
     }
-    return nullptr;
+    return std::make_shared<PBFTReqFactory>();
 }
 
 std::shared_ptr<PBFTMsgFactoryInterface> Ledger::createPBFTMsgFactory()
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
-    {
-        return std::make_shared<PBFTMsgFactory>();
-    }
-    else if (dev::stringCmpIgnoreCase(
+    if (dev::stringCmpIgnoreCase(
                  m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         return std::make_shared<GroupPBFTMsgFactory>();
     }
-    return nullptr;
+    return std::make_shared<PBFTMsgFactory>();
 }
 
 void Ledger::initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
