@@ -59,7 +59,9 @@ void RotationPBFTEngine::updateConsensusList()
         if (getNodeIDByIndex(removeNodeId, removeIndex))
         {
             m_consensusList.erase(removeNodeId);
-            m_consensusIdList.pop_back(removeIndex);
+            IDXTYPE index = m_consensusIdList.front();
+            assert(index == removeIndex);
+            m_consensusIdList.pop_front();
         }
         // insert a new node
         NodeID insertNodeId;
@@ -68,7 +70,7 @@ void RotationPBFTEngine::updateConsensusList()
         if (getNodeIDByIndex(insertNodeId, insertIndex))
         {
             m_consensusList.insert(insertNodeId);
-            m_consensusIdList.push_front(insertNodeId)
+            m_consensusIdList.push_back((IDXTYPE)(insertIndex));
         }
         RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList")
                                << LOG_KV("curNumber", m_highestBlock.number())
@@ -97,7 +99,7 @@ std::pair<bool, IDXTYPE> RotationPBFTEngine::getLeader() const
     size_t index = (m_view + m_highestBlock.number()) % m_groupSize;
     auto iter = m_consensusIdList.begin();
     advance(iter, index);
-    return std::make_pair(true, *it);
+    return std::make_pair(true, *iter);
 }
 
 // determine the node should run consensus or not

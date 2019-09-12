@@ -153,6 +153,7 @@ protected:
     std::shared_ptr<dev::consensus::PBFTMsgFactoryInterface> createPBFTMsgFactory();
     void initPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
     void initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
+    void initRotationPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine);
 
 private:
     /// create PBFTConsensus
