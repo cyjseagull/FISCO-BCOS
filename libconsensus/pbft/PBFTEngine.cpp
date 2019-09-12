@@ -771,6 +771,7 @@ void PBFTEngine::execBlock(
 void PBFTEngine::onRecvPBFTMessage(
     NetworkException, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
+#if 0
     if (!locatedInConsensusList())
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC(
@@ -778,6 +779,7 @@ void PBFTEngine::onRecvPBFTMessage(
             "directly");
         return;
     }
+#endif
     std::shared_ptr<PBFTMsgPacket> pbft_msg = std::make_shared<PBFTMsgPacket>();
     bool valid = decodeToRequests(pbft_msg, message, session);
     if (!valid)
