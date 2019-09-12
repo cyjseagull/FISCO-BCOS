@@ -538,6 +538,7 @@ CheckResult PBFTEngine::isValidPrepare(std::shared_ptr<PrepareReq> req, std::ost
     if (isFuturePrepare(req))
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
+        broadcastPrepareToOtherGroups(req);
         m_reqCache->addFuturePrepareCache(req);
         return CheckResult::FUTURE;
     }
@@ -766,7 +767,7 @@ void PBFTEngine::execBlock(
 void PBFTEngine::onRecvPBFTMessage(
     NetworkException, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
 {
-    if (nodeIdx() == MAXIDX)
+    if (!locatedInConsensusList())
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC(
             "onRecvPBFTMessage: I'm an observer or not in the group, drop the PBFT message packets "
@@ -1594,6 +1595,10 @@ void PBFTEngine::workLoop()
     {
         try
         {
+            if (!locatedInConsensusList())
+            {
+                wait();
+            }
             std::pair<bool, PBFTMsgPacket> ret = m_msgQueue.tryPop(c_PopWaitSeconds);
             if (ret.first)
             {
@@ -1607,10 +1612,9 @@ void PBFTEngine::workLoop()
             /// to avoid of cpu problem
             else if (m_reqCache->futurePrepareCacheSize() == 0)
             {
-                std::unique_lock<std::mutex> l(x_signalled);
-                m_signalled.wait_for(l, std::chrono::milliseconds(5));
+                wait();
             }
-            if (nodeIdx() != MAXIDX)
+            if (locatedInConsensusList())
             {
                 checkTimeout();
                 handleFutureBlock();

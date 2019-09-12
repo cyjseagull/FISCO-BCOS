@@ -236,11 +236,13 @@ protected:
     void getAllNodesViewStatus(Json::Value& status);
 
     /// broadcast specified message to all-peers with cache-filter and specified filter
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
-        std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
+    virtual bool broadcastMsg(unsigned const& packetType, std::string const& key,
+        bytesConstRef data, std::unordered_set<dev::network::NodeID> const& filter,
+        unsigned const& ttl,
         std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction);
 
-    bool broadcastMsg(unsigned const& packetType, std::string const& key, bytesConstRef data,
+    virtual bool broadcastMsg(unsigned const& packetType, std::string const& key,
+        bytesConstRef data,
         std::unordered_set<dev::network::NodeID> const& filter =
             std::unordered_set<dev::network::NodeID>(),
         unsigned const& ttl = 0)
@@ -292,6 +294,13 @@ protected:
     virtual void changeView();
 
     virtual bool checkAndCommitBlock(size_t const& commitSize);
+    virtual bool locatedInConsensusList() { return m_idx != MAXIDX; }
+
+    void wait()
+    {
+        std::unique_lock<std::mutex> l(x_signalled);
+        m_signalled.wait_for(l, std::chrono::milliseconds(5));
+    }
 
 protected:
     // update basic status
