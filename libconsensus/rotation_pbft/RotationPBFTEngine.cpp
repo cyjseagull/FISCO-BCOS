@@ -45,18 +45,21 @@ void RotationPBFTEngine::updateConsensusList()
             if (getNodeIDByIndex(nodeId, index))
             {
                 m_consensusList.insert(nodeId);
+                m_consensusIdList.push_back(index);
             }
         }
     }
     if (m_highestBlock.number() / m_rotationInterval > 0 &&
         0 == m_highestBlock.number() % m_rotationInterval)
     {
+        WriteGuard l(x_consensusListMutex);
         // get the node should be removed
         NodeID removeNodeId;
         size_t removeIndex = (m_highestBlock.number() / m_rotationInterval - 1) % m_groupSize;
         if (getNodeIDByIndex(removeNodeId, removeIndex))
         {
             m_consensusList.erase(removeNodeId);
+            m_consensusIdList.pop_back(removeIndex);
         }
         // insert a new node
         NodeID insertNodeId;
@@ -65,6 +68,7 @@ void RotationPBFTEngine::updateConsensusList()
         if (getNodeIDByIndex(insertNodeId, insertIndex))
         {
             m_consensusList.insert(insertNodeId);
+            m_consensusIdList.push_front(insertNodeId)
         }
         RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList")
                                << LOG_KV("curNumber", m_highestBlock.number())
@@ -73,24 +77,33 @@ void RotationPBFTEngine::updateConsensusList()
                                << LOG_KV("insertIndex", insertIndex)
                                << LOG_KV("insertNode", insertNodeId.abridged())
                                << LOG_KV("nodeIdx", m_idx)
-                               << LOG_KV("nodeId", keyPair.pub().abridged());
+                               << LOG_KV("nodeId", m_keyPair.pub().abridged());
     }
 }
 
 // get the currentLeader
-std::pair<bool, IDXTYPE> RotationPBFTEngine::getLeader()
+std::pair<bool, IDXTYPE> RotationPBFTEngine::getLeader() const
 {
     // this node not loacted in consensus list
-    if (!locatedInConsensusList)
+    if (!locatedInConsensusList())
     {
         return std::make_pair(false, MAXIDX);
     }
-    return PBFTEngine::getLeader();
+    if (m_cfgErr || m_leaderFailed || m_highestBlock.sealer() == Invalid256 || m_nodeNum == 0)
+    {
+        return std::make_pair(false, MAXIDX);
+    }
+    ReadGuard l(x_consensusListMutex);
+    size_t index = (m_view + m_highestBlock.number()) % m_groupSize;
+    auto iter = m_consensusIdList.begin();
+    advance(iter, index);
+    return std::make_pair(true, *it);
 }
 
 // determine the node should run consensus or not
-bool RotationPBFTEngine::locatedInConsensusList()
+bool RotationPBFTEngine::locatedInConsensusList() const
 {
+    ReadGuard l(x_consensusListMutex);
     if (m_consensusList.count(m_keyPair.pub()))
     {
         return true;
@@ -100,7 +113,7 @@ bool RotationPBFTEngine::locatedInConsensusList()
 
 
 // handler used to filter the broadcasted nodes
-ssize_t ScalablePBFTEngine::filterSealerList(dev::network::NodeID const& nodeId)
+ssize_t RotationPBFTEngine::filterSealerList(dev::network::NodeID const& nodeId)
 {
     // the node should be sealer
     if (-1 == getIndexBySealer(nodeId))

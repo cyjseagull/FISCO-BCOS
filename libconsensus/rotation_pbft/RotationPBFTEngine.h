@@ -51,7 +51,7 @@ public:
         m_groupSize = groupSize;
         RPBFTENGINE_LOG(INFO) << LOG_KV("configured groupSize", m_groupSize);
     }
-    bool locatedInConsensusList() override;
+    bool locatedInConsensusList() const override;
 
 
 protected:
@@ -68,8 +68,10 @@ protected:
     std::atomic<int64_t> m_groupSize = {0};
     // the interval(measured by block number) to adjust the sealers
     std::atomic<int64_t> m_rotationInterval = {10};
-    // the list used to
     std::set<dev::h512> m_consensusList;
+
+    mutable SharedMutex x_consensusListMutex;
+    std::list<IDXTYPE> m_consensusIdList;
 };
 }  // namespace consensus
 }  // namespace dev

@@ -294,7 +294,7 @@ protected:
     virtual void changeView();
 
     virtual bool checkAndCommitBlock(size_t const& commitSize);
-    virtual bool locatedInConsensusList() { return m_idx != MAXIDX; }
+    virtual bool locatedInConsensusList() const { return m_idx != MAXIDX; }
 
     void wait()
     {
