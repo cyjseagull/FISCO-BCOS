@@ -1024,8 +1024,7 @@ bool PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                                  << LOG_KV("dropTxsTimeCost", dropTxs_time_cost)
                                  << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                                  << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
-            m_reqCache->delCache(m_reqCache->prepareCache()->block_hash);
-            m_reqCache->removeInvalidFutureCache(m_highestBlock);
+            reportBlockWithoutLock(*m_reqCache->prepareCache()->pBlock);
             return true;
         }
         else
@@ -1105,10 +1104,10 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
             m_onCommitBlock(block.blockHeader().number(), block.getTransactionSize(),
                 m_timeManager.m_changeCycle);
         }
-        /// remove invalid future block
-        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         /// update the highest block
         m_highestBlock = block.blockHeader();
+        /// remove invalid future block
+        m_reqCache->removeInvalidFutureCache(m_highestBlock);
         if (m_highestBlock.number() >= m_consensusBlockNumber)
         {
             updateConsensusStatus();

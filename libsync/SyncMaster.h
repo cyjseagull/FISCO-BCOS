@@ -27,6 +27,7 @@
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
+#include "SyncTransaction.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -54,7 +55,7 @@ public:
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 200)
       : SyncInterface(),
-        Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
+        Worker("Sync-" + std::to_string(_protocolId), idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
@@ -71,12 +72,13 @@ public:
             m_txQueue, _protocolId, _nodeId, _genesisHash);
 
         // signal registration
-        m_tqReady = m_txPool->onReady([&]() { this->noteNewTransactions(); });
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
 
         /// set thread name
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
+        m_syncTrans = std::make_shared<SyncTransaction>(
+            _service, _txPool, _protocolId, _nodeId, m_syncStatus);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -107,19 +109,13 @@ public:
     virtual void registerConsensusVerifyHandler(
         std::function<bool(dev::eth::Block const&)> _handler) override
     {
-        fp_isConsensusOk = _handler;
+        m_syncTrans->registerConsensusVerifyHandler(_handler);
     };
 
     void registerNodeIdFilterHandler(
         std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
     {
         fp_broadCastNodesFilter = _handler;
-    }
-
-    void noteNewTransactions()
-    {
-        m_newTransactions = true;
-        m_signalled.notify_all();
     }
 
     void noteNewBlocks()
@@ -150,6 +146,9 @@ public:
 
     std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
 
+    void maintainTransactions() { m_syncTrans->maintainTransactions(); }
+    void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -163,8 +162,6 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
-    /// Downloading txs queue
-    std::shared_ptr<DownloadingTxsQueue> m_txQueue;
 
     // Internal data
     PROTOCOL_ID m_protocolId;
@@ -186,23 +183,24 @@ private:
     std::condition_variable m_signalled;
 
     // sync state
-    std::atomic_bool m_newTransactions = {false};
     std::atomic_bool m_newBlocks = {false};
     uint64_t m_maintainBlocksTimeout = 0;
-    bool m_needMaintainTransactions = false;
     bool m_needSendStatus = true;
 
+    // sync transactions
+    SyncTransaction::Ptr m_syncTrans = nullptr;
+
+    // maintain peer connections
+    std::shared_ptr<std::thread> m_maintainPeersConnsThread;
+    std::atomic_bool m_running = {false};
+
     // settings
-    dev::eth::Handler<> m_tqReady;
     dev::eth::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
-    std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_broadCastNodesFilter = nullptr;
 
 public:
-    void maintainTransactions();
-    void maintainDownloadingTransactions();
     void maintainBlocks();
     void maintainPeersStatus();
     bool maintainDownloadingQueue();  /// return true if downloading finish

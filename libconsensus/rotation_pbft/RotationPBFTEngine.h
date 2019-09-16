@@ -43,6 +43,8 @@ public:
             _keyPair, _sealerList)
     {
         m_broadcastFilter = boost::bind(&RotationPBFTEngine::filterSealerList, this, _1);
+        m_blockSync->registerNodeIdFilterHandler(boost::bind(
+            &RotationPBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
     }
 
     void setGroupSize(int64_t const& groupSize)
@@ -53,6 +55,17 @@ public:
     }
     bool locatedInConsensusList() const override;
 
+    template <typename T>
+    dev::p2p::NodeIDs NodeIdFilterHandler(T const& peers)
+    {
+        dev::p2p::NodeIDs selectedNode;
+        for (auto const& peer : peers)
+        {
+            if (m_consensusList.count(peer))
+                selectedNode.push_back(peer);
+        }
+        return selectedNode;
+    }
 
 protected:
     void resetConfig() override;
