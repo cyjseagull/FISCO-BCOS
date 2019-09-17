@@ -21,6 +21,7 @@
  */
 
 #include "SyncTransaction.h"
+#include "SyncMsgPacket.h"
 #include <json/json.h>
 
 using namespace std;
@@ -49,17 +50,11 @@ void SyncTransaction::doWork()
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    // Debug print
-    if (isSyncing())
-        printSyncInfo();
     auto printSyncInfo_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     maintainDownloadingTransactions();
     auto maintainDownloadingTransactions_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    maintainBlocks();
-    auto maintainBlocks_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     auto maintainTransactions_time_cost = 0;
@@ -72,7 +67,6 @@ void SyncTransaction::doWork()
 
     SYNC_LOG(TRACE) << LOG_BADGE("Record") << LOG_DESC("Sync loop time record")
                     << LOG_KV("printSyncInfoTimeCost", printSyncInfo_time_cost)
-                    << LOG_KV("maintainBlocksTimeCost", maintainBlocks_time_cost)
                     << LOG_KV("maintainDownloadingTransactionsTimeCost",
                            maintainDownloadingTransactions_time_cost)
                     << LOG_KV("maintainTransactionsTimeCost", maintainTransactions_time_cost)
@@ -88,7 +82,7 @@ void SyncTransaction::workLoop()
         if (!m_newTransactions && m_txQueue->bufferSize() == 0)
         {
             std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(1);
+            m_signalled.wait_for(l, std::chrono::milliseconds(1));
         }
     }
 }

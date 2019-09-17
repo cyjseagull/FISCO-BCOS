@@ -249,7 +249,7 @@ bool PBFTEngine::triggerViewChangeForEmptyBlock(std::shared_ptr<PrepareReq> prep
     return false;
 }
 
-void PBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq)
+void PBFTEngine::broadcastPrepareByTree(std::shared_ptr<PrepareReq> prepareReq)
 {
     int packetType = PBFTPacketType::PrepareReqPacket;
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
@@ -276,7 +276,7 @@ void PBFTEngine::broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepa
     }
     bytes prepare_data;
     prepareReq->encode(prepare_data);
-    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcast prepareReq to nodes of other groups")
+    PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcastPrepareByTree")
                           << LOG_KV("height", prepareReq->height)
                           << LOG_KV("hash", prepareReq->block_hash.abridged())
                           << LOG_KV("targetNodesSize", targetNodes.size()) << LOG_KV("idx", m_idx);
@@ -293,27 +293,24 @@ bool PBFTEngine::generatePrepare(std::shared_ptr<Block> const& block)
     m_notifyNextLeaderSeal = false;
     std::shared_ptr<PrepareReq> prepare_req =
         std::make_shared<PrepareReq>(*block, m_keyPair, m_view, nodeIdx());
-#if 0
-    bytes prepare_data;
-    prepare_req->encode(prepare_data);
-
-/// broadcast the generated preparePacket
-
-    bool succ =
-        broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
-    if (succ)
+    if (!m_broadcastPrepareByTree)
     {
-#endif
+        bytes prepare_data;
+        prepare_req->encode(prepare_data);
+        // broadcast the generated preparePacket
+        broadcastMsg(PBFTPacketType::PrepareReqPacket, prepare_req->uniqueKey(), ref(prepare_data));
+    }
+
     bool ret = triggerViewChangeForEmptyBlock(prepare_req);
     if (ret)
     {
-        broadcastPrepareToOtherGroups(prepare_req);
+        if (m_broadcastPrepareByTree)
+        {
+            broadcastPrepareByTree(prepare_req);
+        }
         return true;
     }
     handlePrepareMsg(prepare_req);
-#if 0
-    }
-#endif
     /// reset the block according to broadcast result
     PBFTENGINE_LOG(INFO) << LOG_DESC("generateLocalPrepare")
                          << LOG_KV("hash", prepare_req->block_hash.abridged())
@@ -515,7 +512,11 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
  */
 CheckResult PBFTEngine::isValidPrepare(std::shared_ptr<PrepareReq> req, std::ostringstream& oss)
 {
-    broadcastPrepareToOtherGroups(req);
+    if (m_broadcastPrepareByTree)
+    {
+        broadcastPrepareByTree(req);
+    }
+
     if (m_reqCache->isExistPrepare(req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: Duplicated Prep")
@@ -538,7 +539,6 @@ CheckResult PBFTEngine::isValidPrepare(std::shared_ptr<PrepareReq> req, std::ost
     if (isFuturePrepare(req))
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
-        broadcastPrepareToOtherGroups(req);
         m_reqCache->addFuturePrepareCache(req);
         return CheckResult::FUTURE;
     }

@@ -34,8 +34,8 @@
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
-#include <libconsensus/rotation_pbft/RotationPBFTEngine.h>
-#include <libconsensus/rotation_pbft/RotationPBFTFactory.h>
+#include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
+#include <libconsensus/rotating_pbft/RotatingPBFTFactory.h>
 #include <libdevcore/easylog.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
@@ -140,12 +140,13 @@ void Ledger::initGenesisConfig(std::string const& configPath)
             BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
                                   << errinfo_comment("groupSize must be not smaller than 0"));
         }
-        m_param->mutableConsensusParam().switchBlockNum =
-            pt.get<int64_t>("consensus.switch_blocks", 10);
-        if (m_param->mutableConsensusParam().switchBlockNum < 0)
+
+        m_param->mutableConsensusParam().rotatingInterval =
+            pt.get<int64_t>("consensus.rotating_interval", 10);
+        if (m_param->mutableConsensusParam().rotatingInterval < 0)
         {
-            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed()
-                                  << errinfo_comment("switchBlockNum must be not smaller than 0"));
+            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+                                      "rotatingInterval must be not smaller than 0"));
         }
 
         Ledger_LOG(INFO) << LOG_BADGE("initGenesisConfig")
@@ -157,7 +158,8 @@ void Ledger::initGenesisConfig(std::string const& configPath)
                          << LOG_KV("topic", m_param->mutableStorageParam().topic)
                          << LOG_KV("maxRetry", m_param->mutableStorageParam().maxRetry)
                          << LOG_KV("groupSize", m_param->mutableConsensusParam().groupSize)
-                         << LOG_KV("switchBlocks", m_param->mutableConsensusParam().switchBlockNum);
+                         << LOG_KV("rotatingInterval",
+                                m_param->mutableConsensusParam().rotatingInterval);
     }
     catch (std::exception& e)
     {
@@ -551,17 +553,16 @@ std::shared_ptr<ConsensusEngineFactory> Ledger::createPBFTEngineFactory()
         return std::make_shared<GroupPBFTEngineFactory>();
     }
     else if (dev::stringCmpIgnoreCase(
-                 m_param->mutableConsensusParam().consensusType, "rotation_pbft") == 0)
+                 m_param->mutableConsensusParam().consensusType, "rotating_pbft") == 0)
     {
-        return std::make_shared<RotationPBFTFactory>();
+        return std::make_shared<RotatingPBFTFactory>();
     }
     return nullptr;
 }
 
 std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
 {
-    if (dev::stringCmpIgnoreCase(
-                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         return std::make_shared<GroupPBFTReqFactory>();
     }
@@ -570,8 +571,7 @@ std::shared_ptr<PBFTReqFactory> Ledger::createPBFTReqFactory()
 
 std::shared_ptr<PBFTMsgFactoryInterface> Ledger::createPBFTMsgFactory()
 {
-    if (dev::stringCmpIgnoreCase(
-                 m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "group_pbft") == 0)
     {
         return std::make_shared<GroupPBFTMsgFactory>();
     }
@@ -601,26 +601,28 @@ void Ledger::initGroupPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbf
     }
     Ledger_LOG(DEBUG) << LOG_BADGE("initGroupPBFTEngine")
                       << LOG_KV("configuredGroupSize", m_param->mutableConsensusParam().groupSize)
-                      << LOG_KV("switchBlockNum", m_param->mutableConsensusParam().switchBlockNum);
+                      << LOG_KV(
+                             "rotatingInterval", m_param->mutableConsensusParam().rotatingInterval);
     std::shared_ptr<GroupPBFTEngine> groupPBFTEngine =
         std::dynamic_pointer_cast<GroupPBFTEngine>(pbftEngine);
     assert(groupPBFTEngine);
     groupPBFTEngine->setGroupSize(m_param->mutableConsensusParam().groupSize);
     groupPBFTEngine->setConsensusZoneSwitchBlockNumber(
-        m_param->mutableConsensusParam().switchBlockNum);
+        m_param->mutableConsensusParam().rotatingInterval);
 }
 
-void Ledger::initRotationPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
+void Ledger::initRotatingPBFTEngine(std::shared_ptr<dev::consensus::PBFTEngine> pbftEngine)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotation_pbft") !=
+    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rotating_pbft") !=
         0)
     {
         return;
     }
-    std::shared_ptr<RotationPBFTEngine> rotationPBFTEngine =
-        std::dynamic_pointer_cast<RotationPBFTEngine>(pbftEngine);
-    rotationPBFTEngine->setGroupSize(m_param->mutableConsensusParam().groupSize);
-    Ledger_LOG(DEBUG) << LOG_BADGE("initRotationPBFTEngine")
+    std::shared_ptr<RotatingPBFTEngine> rotatingPBFTEngine =
+        std::dynamic_pointer_cast<RotatingPBFTEngine>(pbftEngine);
+    rotatingPBFTEngine->setGroupSize(m_param->mutableConsensusParam().groupSize);
+    rotatingPBFTEngine->setRotatingInterval(m_param->mutableConsensusParam().rotatingInterval);
+    Ledger_LOG(DEBUG) << LOG_BADGE("initRotatingPBFTEngine")
                       << LOG_KV("configuredGroupSize", m_param->mutableConsensusParam().groupSize);
 }
 
@@ -683,7 +685,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
 
     initPBFTEngine(pbftEngine);
     initGroupPBFTEngine(pbftEngine);
-    initRotationPBFTEngine(pbftEngine);
+    initRotatingPBFTEngine(pbftEngine);
 
     return pbftSealer;
 }
@@ -737,11 +739,11 @@ bool Ledger::consensusInitFactory()
         Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("create hotstuff!");
         m_sealer = createHotStuffSealer();
     }
-    // create rotation pbft
+    // create rotating pbft
     else if (dev::stringCmpIgnoreCase(
-                 m_param->mutableConsensusParam().consensusType, "rotation_pbft") == 0)
+                 m_param->mutableConsensusParam().consensusType, "rotating_pbft") == 0)
     {
-        Ledger_LOG(INFO) << LOG_BADGE("initLeadger") << LOG_DESC("create rotation_pbft");
+        Ledger_LOG(INFO) << LOG_BADGE("initLeadger") << LOG_DESC("create rotating_pbft");
         m_sealer = createPBFTSealer();
     }
     else

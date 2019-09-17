@@ -55,7 +55,7 @@ public:
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned _idleWaitMs = 200)
       : SyncInterface(),
-        Worker("Sync-" + std::to_string(_protocolId), idleWaitMs),
+        Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
@@ -78,7 +78,7 @@ public:
         std::string threadName = "Sync-" + std::to_string(m_groupId);
         setName(threadName);
         m_syncTrans = std::make_shared<SyncTransaction>(
-            _service, _txPool, _protocolId, _nodeId, m_syncStatus);
+            _service, _txPool, m_txQueue, _protocolId, _nodeId, m_syncStatus);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -109,13 +109,13 @@ public:
     virtual void registerConsensusVerifyHandler(
         std::function<bool(dev::eth::Block const&)> _handler) override
     {
-        m_syncTrans->registerConsensusVerifyHandler(_handler);
+        fp_isConsensusOk = _handler;
     };
 
     void registerNodeIdFilterHandler(
         std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> _handler) override
     {
-        fp_broadCastNodesFilter = _handler;
+        m_syncTrans->registerNodeIdFilterHandler(_handler);
     }
 
     void noteNewBlocks()
@@ -158,8 +158,13 @@ private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     /// block verifier
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+
+    /// Downloading txs queue
+    std::shared_ptr<DownloadingTxsQueue> m_txQueue;
+
     /// Block queue and peers
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
+
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 

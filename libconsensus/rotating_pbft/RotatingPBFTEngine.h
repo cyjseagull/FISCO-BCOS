@@ -29,10 +29,10 @@ namespace dev
 {
 namespace consensus
 {
-class RotationPBFTEngine : public PBFTEngine
+class RotatingPBFTEngine : public PBFTEngine
 {
 public:
-    RotationPBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
+    RotatingPBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
         std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync,
@@ -42,9 +42,11 @@ public:
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
     {
-        m_broadcastFilter = boost::bind(&RotationPBFTEngine::filterSealerList, this, _1);
+        m_broadcastFilter = boost::bind(&RotatingPBFTEngine::filterSealerList, this, _1);
         m_blockSync->registerNodeIdFilterHandler(boost::bind(
-            &RotationPBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
+            &RotatingPBFTEngine::NodeIdFilterHandler<std::set<dev::p2p::NodeID> const&>, this, _1));
+        // only broadcast to the consensus list
+        m_broadcastPrepareByTree = false;
     }
 
     void setGroupSize(int64_t const& groupSize)
@@ -53,6 +55,12 @@ public:
         m_groupSize = groupSize;
         RPBFTENGINE_LOG(INFO) << LOG_KV("configured groupSize", m_groupSize);
     }
+
+    void setRotatingInterval(int64_t const& rotatingInterval)
+    {
+        m_rotatingInterval = rotatingInterval;
+    }
+
     bool locatedInConsensusList() const override;
 
     template <typename T>
@@ -80,7 +88,7 @@ protected:
     // configured group size
     std::atomic<int64_t> m_groupSize = {0};
     // the interval(measured by block number) to adjust the sealers
-    std::atomic<int64_t> m_rotationInterval = {10};
+    std::atomic<int64_t> m_rotatingInterval = {10};
     std::atomic<int64_t> m_lastGroup = {-1};
 
     std::set<dev::h512> m_consensusList;

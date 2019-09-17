@@ -16,24 +16,24 @@
  */
 /**
  * @brief : factory used to create PBFTEngine
- * @file: RotationPBFTFactory.h
+ * @file: RotatingPBFTFactory.h
  * @author: yujiechen
  *
  * @date: 2019-06-24
  *
  */
 #pragma once
-#include "RotationPBFTEngine.h"
+#include "RotatingPBFTEngine.h"
 #include <libconsensus/ConsensusEngineFactory.h>
 namespace dev
 {
 namespace consensus
 {
-class RotationPBFTFactory : public ConsensusEngineFactory
+class RotatingPBFTFactory : public ConsensusEngineFactory
 {
 public:
-    RotationPBFTFactory() {}
-    virtual ~RotationPBFTFactory() {}
+    RotatingPBFTFactory() {}
+    virtual ~RotatingPBFTFactory() {}
     std::shared_ptr<ConsensusEngineBase> createConsensusEngine(
         std::shared_ptr<dev::p2p::P2PInterface> service,
         std::shared_ptr<dev::txpool::TxPoolInterface> txPool,
@@ -43,7 +43,7 @@ public:
         dev::PROTOCOL_ID const& protocolId, KeyPair const& keyPair,
         h512s const& sealerList = h512s()) override
     {
-        std::shared_ptr<PBFTEngine> pbftEngine = std::make_shared<RotationPBFTEngine>(
+        std::shared_ptr<PBFTEngine> pbftEngine = std::make_shared<RotatingPBFTEngine>(
             service, txPool, blockChain, blockSync, blockVerifier, protocolId, keyPair, sealerList);
         return pbftEngine;
     }

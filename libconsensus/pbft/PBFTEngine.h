@@ -77,7 +77,7 @@ public:
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
         m_broadcastFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
     }
-    void broadcastPrepareToOtherGroups(std::shared_ptr<PrepareReq> prepareReq);
+    void broadcastPrepareByTree(std::shared_ptr<PrepareReq> prepareReq);
     void setPBFTReqFactory(std::shared_ptr<PBFTReqFactory> pbftReqFactory)
     {
         m_pbftReqFactory = pbftReqFactory;
@@ -632,6 +632,8 @@ protected:
     std::map<IDXTYPE, VIEWTYPE> m_viewMap;
 
     std::atomic<uint64_t> m_sealingNumber = {0};
+
+    bool m_broadcastPrepareByTree = true;
 };
 }  // namespace consensus
 }  // namespace dev

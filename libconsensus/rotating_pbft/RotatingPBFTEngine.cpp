@@ -16,30 +16,30 @@
  */
 
 /**
- * @brief : Implementation of Rotation PBFT Engine
- * @file: RotationPBFTEngine.cpp
+ * @brief : Implementation of Rotating PBFT Engine
+ * @file: RotatingPBFTEngine.cpp
  * @author: yujiechen
  * @date: 2019-09-11
  */
-#include "RotationPBFTEngine.h"
+#include "RotatingPBFTEngine.h"
 using namespace dev::consensus;
 using namespace dev::p2p;
 using namespace dev::network;
 
 // reset config
-void RotationPBFTEngine::resetConfig()
+void RotatingPBFTEngine::resetConfig()
 {
     PBFTEngine::resetConfig();
     m_f = (m_groupSize - 1) / 3;
     updateConsensusList();
 }
 
-void RotationPBFTEngine::updateConsensusList()
+void RotatingPBFTEngine::updateConsensusList()
 {
     int64_t blockNumber = m_blockChain->number();
     if (m_lastGroup == -1)
     {
-        m_lastGroup = blockNumber / m_rotationInterval;
+        m_lastGroup = blockNumber / m_rotatingInterval;
         if (m_lastGroup > 1)
         {
             m_lastGroup -= 1;
@@ -60,8 +60,8 @@ void RotationPBFTEngine::updateConsensusList()
         }
     }
 
-    int64_t currentGroup = blockNumber / m_rotationInterval;
-    if (currentGroup == m_lastGroup || blockNumber % m_rotationInterval != 0)
+    int64_t currentGroup = blockNumber / m_rotatingInterval;
+    if (currentGroup == m_lastGroup || blockNumber % m_rotatingInterval != 0)
     {
         return;
     }
@@ -96,7 +96,7 @@ void RotationPBFTEngine::updateConsensusList()
 }
 
 // get the currentLeader
-std::pair<bool, IDXTYPE> RotationPBFTEngine::getLeader() const
+std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
 {
     // this node not loacted in consensus list
     if (!locatedInConsensusList())
@@ -115,7 +115,7 @@ std::pair<bool, IDXTYPE> RotationPBFTEngine::getLeader() const
 }
 
 // determine the node should run consensus or not
-bool RotationPBFTEngine::locatedInConsensusList() const
+bool RotatingPBFTEngine::locatedInConsensusList() const
 {
     ReadGuard l(x_consensusListMutex);
     if (m_consensusList.count(m_keyPair.pub()))
@@ -127,7 +127,7 @@ bool RotationPBFTEngine::locatedInConsensusList() const
 
 
 // handler used to filter the broadcasted nodes
-ssize_t RotationPBFTEngine::filterSealerList(dev::network::NodeID const& nodeId)
+ssize_t RotatingPBFTEngine::filterSealerList(dev::network::NodeID const& nodeId)
 {
     // the node should be sealer
     if (-1 == getIndexBySealer(nodeId))

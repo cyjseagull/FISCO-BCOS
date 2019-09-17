@@ -56,7 +56,7 @@ struct ConsensusParam
 
     /// param used for group_pbft
     int64_t groupSize = 0;
-    int64_t switchBlockNum = 10;
+    int64_t rotatingInterval = 10;
 };
 
 struct AMDBParam

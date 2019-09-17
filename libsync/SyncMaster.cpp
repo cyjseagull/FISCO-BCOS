@@ -183,7 +183,7 @@ void SyncMaster::workLoop()
         doWork();
         if (idleWaitMs() && m_syncStatus->bq().empty())
         {
-            std::unique_lock<std::mutex> l(x_signalledi);
+            std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
         }
     }

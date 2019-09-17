@@ -44,12 +44,13 @@ class SyncTransaction : public Worker
 public:
     using Ptr = std::shared_ptr<SyncTransaction>;
     SyncTransaction(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, PROTOCOL_ID const& _protocolId,
+        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<DownloadingTxsQueue> _txsQueue, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, std::shared_ptr<SyncMasterStatus> _syncStatus)
       : Worker("Sync-" + std::to_string(_protocolId), 0),
         m_service(_service),
         m_txPool(_txPool),
-        m_txQueue(std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId)),
+        m_txQueue(_txsQueue),
         m_protocolId(_protocolId),
         m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
@@ -64,9 +65,9 @@ public:
 
     virtual ~SyncTransaction() { stop(); };
     /// start blockSync
-    virtual void start() override;
+    virtual void start();
     /// stop blockSync
-    virtual void stop() override;
+    virtual void stop();
     /// doWork every idleWaitMs
     virtual void doWork() override;
     virtual void workLoop() override;
@@ -94,15 +95,16 @@ private:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
     /// transaction pool handler
     std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
-    /// Block queue and peers
-    std::shared_ptr<SyncMasterStatus> m_syncStatus;
-    /// Downloading txs queue
+
     std::shared_ptr<DownloadingTxsQueue> m_txQueue;
 
     // Internal data
     PROTOCOL_ID m_protocolId;
     GROUP_ID m_groupId;
     NodeID m_nodeId;  ///< Nodeid of this node
+
+    /// Block queue and peers
+    std::shared_ptr<SyncMasterStatus> m_syncStatus;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -113,7 +115,7 @@ private:
 
     // sync state
     std::atomic_bool m_newTransactions = {false};
-    bool m_needMaintainTransactions = false;
+    bool m_needMaintainTransactions = true;
 
     // settings
     dev::eth::Handler<> m_tqReady;

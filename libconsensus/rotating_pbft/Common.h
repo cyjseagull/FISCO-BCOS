@@ -16,7 +16,7 @@
  */
 
 /**
- * @brief : Common.h for Scalable PBFT Engine
+ * @brief : Common.h for Rotating PBFT Engine
  * @file: Common.h
  * @author: yujiechen
  * @date: 2019-09-11
@@ -28,6 +28,6 @@ namespace dev
 {
 namespace consensus
 {
-#define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATION-PBFT")
+#define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
 }  // namespace consensus
 }  // namespace dev
