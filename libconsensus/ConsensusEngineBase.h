@@ -405,6 +405,12 @@ protected:
     bool checkSigList(
         std::vector<std::pair<IDXTYPE, Signature>> const& sigList, h256 const& blockHash);
 
+    void printNetworkInfo();
+
+    void updateInNetworkInfo(uint8_t const& packetType, uint64_t const& length);
+    void updateOutNetworkInfo(
+        uint8_t const& packetType, uint64_t sessionSize, uint64_t const& length);
+
 private:
     bool blockExists(h256 const& blockHash)
     {
@@ -461,6 +467,13 @@ protected:
 
     std::shared_ptr<dev::eth::BlockFactory> m_blockFactory = nullptr;
     ssize_t m_broadcastNodes = 3;
+
+    // for network statistic
+    // map between packet id and the statisticInfo(packetCount, packetSize)
+    mutable SharedMutex x_inInfo;
+    std::map<uint8_t, std::pair<uint64_t, uint64_t>> m_inInfo;
+    mutable SharedMutex x_outInfo;
+    std::map<uint8_t, std::pair<uint64_t, uint64_t>> m_outInfo;
 };
 }  // namespace consensus
 }  // namespace dev

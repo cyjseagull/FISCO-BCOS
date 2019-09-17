@@ -247,5 +247,68 @@ bool ConsensusEngineBase::checkSigList(
     return true;
 }
 
+void ConsensusEngineBase::printNetworkInfo()
+{
+    {
+        ReadGuard l(x_inInfo);
+        uint64_t totalInPacketBytes = 0;
+        for (auto const& it : m_inInfo)
+        {
+            totalInPacketBytes += it.second.second;
+            ENGINE_LOG(DEBUG) << LOG_DESC("[Network statistic of Consensus Input]")
+                              << LOG_KV("packetType", std::to_string(it.first))
+                              << LOG_KV("packetCount", it.second.first)
+                              << LOG_KV("packetSize", it.second.second);
+        }
+    }
+    ENGINE_LOG(DEBUG) << LOG_DESC("[Network statistic of Consensus Input]")
+                      << LOG_KV("totalInPacketBytes", totalInPacketBytes);
+    {
+        ReadGuard l(x_outInfo);
+        uint64_t totalOutPacketBytes = 0;
+        for (auto const& it : m_outInfo)
+        {
+            totalOutPacketBytes += it.second.second;
+            ENGINE_LOG(DEBUG) << LOG_DESC("[Network statistic of Consensus Output]")
+                              << LOG_KV("packetType", std::to_string(it.first))
+                              << LOG_KV("packetCount", it.second.first)
+                              << LOG_KV("packetSize", it.second.second);
+        }
+    }
+    ENGINE_LOG(DEBUG) << LOG_DESC("[Network statistic of Consensus Output]")
+                      << LOG_KV("totalOutPacketBytes", totalOutPacketBytes);
+}
+
+void ConsensusEngineBase::updateInNetworkInfo(uint8_t const& packetType, uint64_t const& length)
+{
+    WriteGuard l(x_inInfo);
+    if (!m_inInfo.count(packetType))
+    {
+        m_inInfo[packetType] = std::make_pair(1, length);
+    }
+    else
+    {
+        m_inInfo[packetType].first++;
+        m_inInfo[packetType].second += length;
+    }
+}
+
+void ConsensusEngineBase::updateOutNetworkInfo(
+    uint8_t const& packetType, uint64_t sessionSize, uint64_t const& length)
+{
+    WriteGuard l(x_outInfo);
+    auto dataSize = sessionSize * length;
+    if (!m_outInfo.count(packetType))
+    {
+        m_outInfo[packetType] = std::make_pair(sessionSize, dataSize);
+    }
+    else
+    {
+        m_outInfo[packetType].first += sessionSize;
+        m_outInfo[packetType].second += dataSize;
+    }
+}
+
+
 }  // namespace consensus
 }  // namespace dev

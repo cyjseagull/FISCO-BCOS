@@ -190,6 +190,7 @@ void HotStuffEngine::onRecvHotStuffMessage(dev::p2p::NetworkException,
     }
     if (shouldSaveMessage(message))
     {
+        updateInNetworkInfo(message->packetType(), message->length());
         m_hotstuffMsgQueue.push(message);
         m_signalled.notify_all();
         return;
@@ -220,7 +221,9 @@ bool HotStuffEngine::broadCastMsg(
         }
         nodeIdList.push_back(session.nodeID());
     }
-    m_service->asyncMulticastMessageByNodeIDList(nodeIdList, encodeToP2PMessage(msg));
+    auto message = encodeToP2PMessage(msg);
+    m_service->asyncMulticastMessageByNodeIDList(nodeIdList, message);
+    updateOutNetworkInfo(msg->type(), nodeIdList.size(), message->length());
     return true;
 }
 
@@ -276,7 +279,9 @@ bool HotStuffEngine::sendMessage(HotStuffMsg::Ptr msg, NodeID const& nodeId)
     {
         if (session.nodeID() == nodeId)
         {
-            m_service->asyncSendMessageByNodeID(nodeId, encodeToP2PMessage(msg), nullptr);
+            auto message = encodeToP2PMessage(msg);
+            m_service->asyncSendMessageByNodeID(nodeId, message, nullptr);
+            updateOutNetworkInfo(msg->type(), 1, message->length());
             return true;
         }
     }
@@ -1107,6 +1112,7 @@ void HotStuffEngine::reportBlock(dev::eth::Block const& block)
                                  << LOG_KV("tx", block.getTransactionSize())
                                  << LOG_KV("nodeIdx", nodeIdx());
         m_service->printNetworkStatisticInfo();
+        printNetworkInfo();
         triggerNextView();
     }
 }

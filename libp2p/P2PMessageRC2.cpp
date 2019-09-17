@@ -100,6 +100,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     {
         return dev::network::PACKET_INCOMPLETE;
     }
+    m_originLength = size;
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));

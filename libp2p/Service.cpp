@@ -445,10 +445,10 @@ void Service::updateInPacketStatistic(std::shared_ptr<P2PMessage> message)
     WriteGuard l(x_inPacketBytes);
     if (!m_inPacketBytes.count(message->protocolID()))
     {
-        m_inPacketBytes[message->protocolID()] = message->length();
+        m_inPacketBytes[message->protocolID()] = message->originLength();
         return;
     }
-    m_inPacketBytes[message->protocolID()] += message->length();
+    m_inPacketBytes[message->protocolID()] += message->originLength();
 }
 
 void Service::printNetworkStatisticInfo()
@@ -456,20 +456,30 @@ void Service::printNetworkStatisticInfo()
     // print m_inPacketBytes
     {
         ReadGuard l(x_inPacketBytes);
+        uint64_t totalInPacketBytes = 0;
         for (auto const& it : m_inPacketBytes)
         {
+            totalInPacketBytes += it.second;
             SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("InPacket Statistic")
-                               << LOG_KV("packetType", it.first) << LOG_KV("inBytes", it.second);
+                               << LOG_KV("packetType", std::to_string(it.first))
+                               << LOG_KV("inBytes", it.second);
         }
+        SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("InPacket Statistic")
+                           << LOG_KV("totalInBytes", totalInPacketBytes);
     }
     // print m_outPacketBytes
     {
         ReadGuard l(x_outPacketBytes);
+        uint64_t totalOutPacketBytes = 0;
         for (auto const& it : m_outPacketBytes)
         {
+            totalOutPacketBytes += it.second;
             SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("OutPacket Statistic")
-                               << LOG_KV("packetType", it.first) << LOG_KV("inBytes", it.second);
+                               << LOG_KV("packetType", std::to_string(it.first))
+                               << LOG_KV("inBytes", it.second);
         }
+        SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("InPacket Statistic")
+                           << LOG_KV("totalOutBytes", totalOutPacketBytes);
     }
 }
 
