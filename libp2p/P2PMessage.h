@@ -45,7 +45,7 @@ public:
     virtual ~P2PMessage() {}
 
     virtual uint32_t length() override { return m_length; }
-
+    virtual uint32_t originLength() override { return 0; }
     virtual PROTOCOL_ID protocolID() { return m_protocolID; }
     virtual void setProtocolID(PROTOCOL_ID _protocolID) { setField(m_protocolID, _protocolID); }
     virtual PACKET_TYPE packetType() { return m_packetType; }

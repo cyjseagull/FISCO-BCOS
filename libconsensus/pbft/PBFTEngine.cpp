@@ -283,6 +283,7 @@ void PBFTEngine::broadcastPrepareByTree(std::shared_ptr<PrepareReq> prepareReq)
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
         targetNodes, transDataToMessage(ref(prepare_data), packetType, 1));
+    updateOutNetworkInfo(packetType, targetNodes.size(), prepare_data.size());
 }
 
 
@@ -493,6 +494,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     /// send messages according to node id
     m_service->asyncMulticastMessageByNodeIDList(
         nodeIdList, transDataToMessage(data, packetType, ttl));
+    updateOutNetworkInfo(packetType, nodeIdList.size(), data.size());
     return true;
 }
 
@@ -788,6 +790,7 @@ void PBFTEngine::onRecvPBFTMessage(
     }
     if (shouldPushMsg(pbft_msg->packet_id))
     {
+        updateInNetworkInfo(pbft_msg->packet_id, message->length());
         m_msgQueue.push(*pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
         m_signalled.notify_all();
@@ -1025,6 +1028,7 @@ bool PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                                  << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                                  << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
             reportBlockWithoutLock(*m_reqCache->prepareCache()->pBlock);
+            printNetworkInfo();
             return true;
         }
         else

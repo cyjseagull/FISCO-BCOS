@@ -581,6 +581,7 @@ protected:
         return true;
     }
 
+
 protected:
     VIEWTYPE m_view = 0;
     VIEWTYPE m_toView = 0;
