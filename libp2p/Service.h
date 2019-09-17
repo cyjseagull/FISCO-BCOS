@@ -137,7 +137,13 @@ public:
     void updateStaticNodes(
         std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
 
+    void printNetworkStatisticInfo() override;
+
 private:
+    // for network statistic
+    void updateOutPacketStatistic(std::shared_ptr<P2PMessage> message);
+    void updateInPacketStatistic(std::shared_ptr<P2PMessage> message);
+
     NodeIDs getPeersByTopic(std::string const& topic);
 
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -169,6 +175,14 @@ private:
     KeyPair m_alias;
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
+
+    // for network statistic
+    // statistic type including to: PBFT, BlockSync, HotStuff
+    mutable SharedMutex x_outPacketBytes;
+    std::map<dev::PROTOCOL_ID, uint64_t> m_outPacketBytes;
+
+    mutable SharedMutex x_inPacketBytes;
+    std::map<dev::PROTOCOL_ID, uint64_t> m_inPacketBytes;
 
     bool m_run = false;
 };

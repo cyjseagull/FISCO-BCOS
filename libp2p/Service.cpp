@@ -268,6 +268,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
 
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+        updateInPacketStatistic(p2pMessage);
 
         // AMOP topic message, redirect to p2psession
         if (abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::Topic)
@@ -404,6 +405,8 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
+            // statistic out packet
+            updateOutPacketStatistic(message);
         }
         else
         {
@@ -424,6 +427,52 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
         }
     }
 }
+
+// for network statistic
+void Service::updateOutPacketStatistic(std::shared_ptr<P2PMessage> message)
+{
+    WriteGuard l(x_outPacketBytes);
+    if (!m_outPacketBytes.count(message->protocolID()))
+    {
+        m_outPacketBytes[message->protocolID()] = message->length();
+        return;
+    }
+    m_outPacketBytes[message->protocolID()] += message->length();
+}
+
+void Service::updateInPacketStatistic(std::shared_ptr<P2PMessage> message)
+{
+    WriteGuard l(x_inPacketBytes);
+    if (!m_inPacketBytes.count(message->protocolID()))
+    {
+        m_inPacketBytes[message->protocolID()] = message->length();
+        return;
+    }
+    m_inPacketBytes[message->protocolID()] += message->length();
+}
+
+void Service::printNetworkStatisticInfo()
+{
+    // print m_inPacketBytes
+    {
+        ReadGuard l(x_inPacketBytes);
+        for (auto const& it : m_inPacketBytes)
+        {
+            SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("InPacket Statistic")
+                               << LOG_KV("packetType", it.first) << LOG_KV("inBytes", it.second);
+        }
+    }
+    // print m_outPacketBytes
+    {
+        ReadGuard l(x_outPacketBytes);
+        for (auto const& it : m_outPacketBytes)
+        {
+            SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("OutPacket Statistic")
+                               << LOG_KV("packetType", it.first) << LOG_KV("inBytes", it.second);
+        }
+    }
+}
+
 
 P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr message)
 {

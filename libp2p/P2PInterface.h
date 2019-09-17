@@ -84,6 +84,8 @@ public:
 
     virtual void setTopics(std::shared_ptr<std::vector<std::string>> _topics) = 0;
 
+    virtual void printNetworkStatisticInfo() {}
+
     virtual std::shared_ptr<P2PMessageFactory> p2pMessageFactory() = 0;
 };
 

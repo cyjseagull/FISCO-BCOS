@@ -1106,6 +1106,7 @@ void HotStuffEngine::reportBlock(dev::eth::Block const& block)
                                  << LOG_KV("next", m_consensusBlockNumber)
                                  << LOG_KV("tx", block.getTransactionSize())
                                  << LOG_KV("nodeIdx", nodeIdx());
+        m_service->printNetworkStatisticInfo();
         triggerNextView();
     }
 }
