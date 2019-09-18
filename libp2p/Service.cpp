@@ -432,23 +432,25 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 void Service::updateOutPacketStatistic(std::shared_ptr<P2PMessage> message)
 {
     WriteGuard l(x_outPacketBytes);
-    if (!m_outPacketBytes.count(message->protocolID()))
+    std::pair<GROUP_ID, MODULE_ID> ret = dev::eth::getGroupAndProtocol(message->protocolID());
+    if (!m_outPacketBytes.count(ret.second))
     {
-        m_outPacketBytes[message->protocolID()] = message->length();
+        m_outPacketBytes[ret.second] = message->length();
         return;
     }
-    m_outPacketBytes[message->protocolID()] += message->length();
+    m_outPacketBytes[ret.second] += message->length();
 }
 
 void Service::updateInPacketStatistic(std::shared_ptr<P2PMessage> message)
 {
     WriteGuard l(x_inPacketBytes);
-    if (!m_inPacketBytes.count(message->protocolID()))
+    std::pair<GROUP_ID, MODULE_ID> ret = dev::eth::getGroupAndProtocol(message->protocolID());
+    if (!m_inPacketBytes.count(ret.second))
     {
-        m_inPacketBytes[message->protocolID()] = message->originLength();
+        m_inPacketBytes[ret.second] = message->originLength();
         return;
     }
-    m_inPacketBytes[message->protocolID()] += message->originLength();
+    m_inPacketBytes[ret.second] += message->originLength();
 }
 
 void Service::printNetworkStatisticInfo()
@@ -476,7 +478,7 @@ void Service::printNetworkStatisticInfo()
             totalOutPacketBytes += it.second;
             SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("OutPacket Statistic")
                                << LOG_KV("packetType", std::to_string(it.first))
-                               << LOG_KV("inBytes", it.second);
+                               << LOG_KV("outBytes", it.second);
         }
         SERVICE_LOG(DEBUG) << LOG_DESC("CONSENSUS") << LOG_DESC("InPacket Statistic")
                            << LOG_KV("totalOutBytes", totalOutPacketBytes);
