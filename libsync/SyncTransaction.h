@@ -89,6 +89,12 @@ public:
     NodeID nodeId() { return m_nodeId; }
     std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
 
+    void printSendedTxsInfo()
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("CONS: printSendedTxsInfo")
+                        << LOG_KV("sendedTxsCount", m_sendedTxsBytes)
+                        << LOG_KV("sendedTxsBytes", m_sendedTxsBytes);
+    }
 
 private:
     /// p2p service handler
@@ -121,6 +127,9 @@ private:
     dev::eth::Handler<> m_tqReady;
 
     std::function<dev::p2p::NodeIDs(std::set<NodeID> const&)> fp_broadCastNodesFilter = nullptr;
+
+    std::atomic<uint64_t> m_sendedTxsCount = {0};
+    std::atomic<uint64_t> m_sendedTxsBytes = {0};
 
 public:
     void maintainTransactions();

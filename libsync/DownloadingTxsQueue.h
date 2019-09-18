@@ -62,10 +62,19 @@ public:
         return m_buffer->size();
     }
 
+    void printDownloadingTxsInfo()
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("CONS: printDownloadingTxsInfo")
+                        << LOG_KV("downloadTxsCount", m_downloadTxsCount)
+                        << LOG_KV("downloadTxsBytes", m_downloadTxsBytes);
+    }
+
 private:
     NodeID m_nodeId;
     std::shared_ptr<std::vector<DownloadTxsShard>> m_buffer;
     mutable SharedMutex x_buffer;
+    std::atomic<uint64_t> m_downloadTxsCount = {0};
+    std::atomic<uint64_t> m_downloadTxsBytes = {0};
 };
 
 }  // namespace sync

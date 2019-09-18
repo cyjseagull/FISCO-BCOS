@@ -63,6 +63,8 @@ public:
     virtual void registerNodeIdFilterHandler(
         std::function<dev::p2p::NodeIDs(std::set<dev::network::NodeID> const&)>)
     {}
+
+    virtual void printNetworkStatisticInfo() {}
 };
 
 }  // namespace sync

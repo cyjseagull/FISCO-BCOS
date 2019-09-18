@@ -163,6 +163,8 @@ void DownloadingBlockQueue::flushBufferToQueue()
                 {
                     successCnt++;
                     m_blocks.push(block);
+                    m_downloadBlockCount++;
+                    m_downloadBlockBytes += rlps[i].data().size();
                 }
             }
             catch (std::exception& e)

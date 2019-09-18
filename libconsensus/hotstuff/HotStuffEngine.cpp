@@ -1113,6 +1113,7 @@ void HotStuffEngine::reportBlock(dev::eth::Block const& block)
                                  << LOG_KV("nodeIdx", nodeIdx());
         m_service->printNetworkStatisticInfo();
         printNetworkInfo();
+        m_sync->printNetworkStatisticInfo();
         triggerNextView();
     }
 }

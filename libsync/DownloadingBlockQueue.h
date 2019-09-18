@@ -100,6 +100,13 @@ public:
 
     void clearFullQueueIfNotHas(int64_t _blockNumber);
 
+    void printDownloadingBlockInfo()
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("CONS: printDownloadingBlockInfo")
+                        << LOG_KV("downloadBlockCount", m_downloadBlockCount)
+                        << LOG_KV("downloadBlockBytes", m_downloadBlockBytes);
+    }
+
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
@@ -111,6 +118,8 @@ private:
 
 private:
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);
+    std::atomic<uint64_t> m_downloadBlockBytes = {0};
+    std::atomic<uint64_t> m_downloadBlockCount = {0};
 };
 
 }  // namespace sync

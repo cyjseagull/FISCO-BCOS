@@ -136,6 +136,8 @@ void SyncTransaction::maintainTransactions()
     m_syncStatus->foreachPeerRandom([&](shared_ptr<SyncPeerStatus> _p) {
         std::vector<bytes> txRLPs;
         unsigned txsSize = peerTransactions[_p->nodeId].size();
+        m_sendedTxsCount += txsSize;
+
         if (0 == txsSize)
             return true;  // No need to send
 
@@ -147,6 +149,8 @@ void SyncTransaction::maintainTransactions()
 
         auto msg = packet.toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
+
+        m_sendedTxsBytes += msg->length();
 
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))

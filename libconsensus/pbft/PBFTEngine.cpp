@@ -1028,7 +1028,6 @@ bool PBFTEngine::checkAndCommitBlock(size_t const& commitSize)
                                  << LOG_KV("noteSealingTimeCost", noteSealing_time_cost)
                                  << LOG_KV("totalTimeCost", utcTime() - start_commit_time);
             reportBlockWithoutLock(*m_reqCache->prepareCache()->pBlock);
-            printNetworkInfo();
             return true;
         }
         else
@@ -1126,6 +1125,8 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("nodeIdx", nodeIdx());
         m_service->printNetworkStatisticInfo();
+        printNetworkInfo();
+        m_sync->printNetworkStatisticInfo();
     }
 }
 

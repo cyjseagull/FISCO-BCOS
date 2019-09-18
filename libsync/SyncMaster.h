@@ -149,6 +149,13 @@ public:
     void maintainTransactions() { m_syncTrans->maintainTransactions(); }
     void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
 
+    void printNetworkStatisticInfo() override
+    {
+        m_syncTrans->printSendedTxsInfo();
+        m_txQueue->printDownloadingTxsInfo();
+        m_syncStatus->bq().printDownloadingBlockInfo();
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -204,6 +211,9 @@ private:
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+
+    std::atomic<uint64_t> m_sendedBlockCount = {0};
+    std::atomic<uint64_t> m_sendedBlockBytes = {0};
 
 public:
     void maintainBlocks();

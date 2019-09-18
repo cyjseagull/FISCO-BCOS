@@ -31,12 +31,15 @@ void DownloadingTxsQueue::push(bytesConstRef _txsBytes, NodeID const& _fromPeer)
 {
     WriteGuard l(x_buffer);
     m_buffer->emplace_back(_txsBytes, _fromPeer);
+    m_downloadTxsBytes += _txsBytes.size();
 }
 
 
 void DownloadingTxsQueue::pop2TxPool(
     std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, dev::eth::CheckTransaction _checkSig)
 {
+    if (_txPool->isFull())
+        return;
     auto start_time = utcTime();
     auto record_time = utcTime();
     // fetch from buffer
@@ -50,8 +53,6 @@ void DownloadingTxsQueue::pop2TxPool(
     auto newBuffer_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
-    if (_txPool->isFull())
-        return;
     auto isBufferFull_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -166,5 +167,6 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_KV("getPendingSizeTimeCost", getPendingSize_time_cost)
                         << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
                         << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
+        m_downloadTxsCount += txs.size();
     }
 }
