@@ -1126,7 +1126,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("nodeIdx", nodeIdx());
         m_service->printNetworkStatisticInfo();
         printNetworkInfo();
-        m_sync->printNetworkStatisticInfo();
+        m_blockSync->printNetworkStatisticInfo();
     }
 }
 

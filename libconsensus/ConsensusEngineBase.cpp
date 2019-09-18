@@ -249,9 +249,9 @@ bool ConsensusEngineBase::checkSigList(
 
 void ConsensusEngineBase::printNetworkInfo()
 {
+    uint64_t totalInPacketBytes = 0;
     {
         ReadGuard l(x_inInfo);
-        uint64_t totalInPacketBytes = 0;
         for (auto const& it : m_inInfo)
         {
             totalInPacketBytes += it.second.second;
@@ -263,9 +263,9 @@ void ConsensusEngineBase::printNetworkInfo()
     }
     ENGINE_LOG(DEBUG) << LOG_DESC("[Network statistic of Consensus Input]")
                       << LOG_KV("totalInPacketBytes", totalInPacketBytes);
+    uint64_t totalOutPacketBytes = 0;
     {
         ReadGuard l(x_outInfo);
-        uint64_t totalOutPacketBytes = 0;
         for (auto const& it : m_outInfo)
         {
             totalOutPacketBytes += it.second.second;

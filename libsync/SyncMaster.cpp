@@ -385,7 +385,8 @@ void SyncMaster::maintainPeersStatus()
 bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
-    DownloadingBlockQueue& bq = m_syncStatus->bq();
+    DownloadingBlockQueue& bq = 
+    ;
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
         bq.clear();
@@ -641,7 +642,7 @@ void SyncMaster::maintainBlockRequest()
                                 << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
                                 << LOG_KV("timeCost", utcTime() - start_get_block_time);
                 blockContainer.batchAndSend(blockRLP);
-                m_sendedBlockBytes += blockRLP.size();
+                m_sendedBlockBytes += blockRLP->size();
                 m_sendedBlockCount += 1;
             }
 
