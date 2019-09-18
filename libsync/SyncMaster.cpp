@@ -385,7 +385,7 @@ void SyncMaster::maintainPeersStatus()
 bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
-    DownloadingBlockQueue& bq = 
+    DownloadingBlockQueue& bq = m_syncStatus->bq();
     ;
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
