@@ -151,6 +151,9 @@ public:
 
     void printNetworkStatisticInfo() override
     {
+        SYNC_LOG(DEBUG) << LOG_DESC("Consensus: printSendedBlockInfo")
+                        << LOG_KV("sendedBlockCount", m_sendedBlockCount)
+                        << LOG_KV("sendedBlockBytes", m_sendedBlockBytes);
         m_syncTrans->printSendedTxsInfo();
         m_txQueue->printDownloadingTxsInfo();
         m_syncStatus->bq().printDownloadingBlockInfo();
