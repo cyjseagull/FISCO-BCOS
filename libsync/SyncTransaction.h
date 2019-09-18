@@ -92,7 +92,7 @@ public:
     void printSendedTxsInfo()
     {
         SYNC_LOG(DEBUG) << LOG_DESC("CONS: printSendedTxsInfo")
-                        << LOG_KV("sendedTxsCount", m_sendedTxsBytes)
+                        << LOG_KV("sendedTxsCount", m_sendedTxsCount)
                         << LOG_KV("sendedTxsBytes", m_sendedTxsBytes);
     }
 
