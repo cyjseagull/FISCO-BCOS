@@ -157,7 +157,18 @@ void ConsensusEngineBase::updateConsensusNodeList()
         if (m_lastNodeList != s2.str())
         {
             ENGINE_LOG(TRACE) << "[updateConsensusNodeList] update P2P List done.";
-            updateNodeListInP2P();
+
+            // get all nodes
+            auto sealerList = m_blockChain->sealerList();
+            dev::h512s nodeList = sealerList + observerList;
+            std::sort(nodeList.begin(), nodeList.end());
+            std::sort(sealerList.begin(), sealerList.end());
+            // update the requiredInfo for treeTopologyRouter
+            m_blockSync->updateNodeInfo(nodeList, sealerList);
+
+            // update the p2p nodeList
+            updateNodeListInP2P(nodeList);
+            // update the cache
             m_lastNodeList = s2.str();
         }
     }
@@ -169,9 +180,8 @@ void ConsensusEngineBase::updateConsensusNodeList()
     }
 }
 
-void ConsensusEngineBase::updateNodeListInP2P()
+void ConsensusEngineBase::updateNodeListInP2P(dev::h512s const& nodeList)
 {
-    dev::h512s nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
     std::pair<GROUP_ID, MODULE_ID> ret = getGroupAndProtocol(m_protocolId);
     m_service->setNodeListByGroupID(ret.first, nodeList);
 }

@@ -227,7 +227,10 @@ void SyncMaster::maintainBlocks()
     int64_t number = m_blockChain->number();
     h256 const& currentHash = m_blockChain->numberHash(number);
 
-    // Just broadcast status
+    // Just broadcast status by tree
+    sendSyncStatusByTree(number, currentHash);
+
+#if 0
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         SyncStatusPacket packet;
         packet.encode(number, m_genesisHash, currentHash);
@@ -244,6 +247,57 @@ void SyncMaster::maintainBlocks()
 
         return true;
     });
+#endif
+}
+
+void SyncMaster::sendSyncStatusByTree(BlockNumber const& blockNumber, h256 const& currentHash)
+{
+    auto selectedNodes = m_syncTreeRouter->selectNode(m_syncStatus->peersSet());
+    for (auto const nodeId : selectedNodes)
+    {
+        sendSyncStatusByNodeId(blockNumber, currentHash);
+    }
+}
+
+void SyncMaster::broadcastSyncStatus(BlockNumber const& blockNumber, h256 const& currentHash)
+{
+#if 0
+ m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        SyncStatusPacket packet;
+        packet.encode(number, m_genesisHash, currentHash);
+
+        m_service->asyncSendMessageByNodeID(
+            _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+
+        SYNC_LOG(DEBUG) << LOG_BADGE("Status")
+                        << LOG_DESC("Send current status when maintainBlocks")
+                        << LOG_KV("number", int(number))
+                        << LOG_KV("genesisHash", m_genesisHash.abridged())
+                        << LOG_KV("currentHash", currentHash.abridged())
+                        << LOG_KV("peer", _p->nodeId.abridged());
+
+        return true;
+    });
+#endif
+    m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
+        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+    });
+}
+
+bool SyncMaster::sendSyncStatusByNodeId(
+    BlockNumber const& blockNumber, h256 const& currentHash, dev::network::NodeID const& nodeId)
+{
+    SyncStatusPacket packet;
+    packet.encode(blockNumber, m_genesisHash, currentHash);
+    m_service->asyncSendMessageByNodeID(
+        nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+
+    SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
+                    << LOG_KV("number", int(number))
+                    << LOG_KV("genesisHash", m_genesisHash.abridged())
+                    << LOG_KV("currentHash", currentHash.abridged())
+                    << LOG_KV("peer", nodeId.abridged());
+    return true;
 }
 
 void SyncMaster::maintainPeersStatus()

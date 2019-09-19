@@ -28,6 +28,7 @@
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
 #include "SyncTransaction.h"
+#include "SyncTreeTopology.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcore/FixedHash.h>
@@ -79,6 +80,10 @@ public:
         setName(threadName);
         m_syncTrans = std::make_shared<SyncTransaction>(
             _service, _txPool, m_txQueue, _protocolId, _nodeId, m_syncStatus);
+
+        m_syncTreeRouter = std::make_shared<SyncTreeTopology>(_nodeId);
+        // update the nodeInfo for syncTreeRouter
+        updateNodeInfo();
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -159,6 +164,33 @@ public:
         m_syncStatus->bq().printDownloadingBlockInfo();
     }
 
+    void sendSyncStatusByTree(
+        dev::eth::BlockNumber const& blockNumber, dev::h256 const& currentHash);
+
+    void broadcastSyncStatus(
+        dev::eth::BlockNumber const& blockNumber, dev::h256 const& currentHash);
+
+    bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
+        dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
+
+    void updateNodeInfo(dev::h512s const& _nodeList, dev::h512s const& _consensusNodes) override
+    {
+        m_syncTreeRouter->updateNodeListInfo(_nodeList);
+        m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
+        m_syncTreeRouter->updateStartAndEndIndex();
+    }
+
+    // init via blockchain when the sync thread started
+    void updateNodeInfo()
+    {
+        auto sealerList = m_blockChain->sealerList();
+        std::sort(sealerList.begin(), sealerList.end());
+        auto observerList = m_blockChain->observerList();
+        auto nodeList = sealerList + observerList;
+        std::sort(nodeList.begin(), nodeList.end());
+        updateNodeInfo(nodeList, sealerList);
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -205,6 +237,9 @@ private:
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;
 
+    // handler for find the tree router
+    SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
+
     // maintain peer connections
     std::shared_ptr<std::thread> m_maintainPeersConnsThread;
     std::atomic_bool m_running = {false};
@@ -217,6 +252,7 @@ private:
 
     std::atomic<uint64_t> m_sendedBlockCount = {0};
     std::atomic<uint64_t> m_sendedBlockBytes = {0};
+
 
 public:
     void maintainBlocks();

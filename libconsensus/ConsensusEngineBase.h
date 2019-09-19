@@ -373,7 +373,7 @@ protected:
     virtual void checkBlockValid(dev::eth::Block const& block);
 
     virtual void updateConsensusNodeList();
-    virtual void updateNodeListInP2P();
+    virtual void updateNodeListInP2P(dev::h512s const& nodeList);
 
     /// set the max number of transactions in a block
     virtual void updateMaxBlockTransactions()
