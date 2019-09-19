@@ -45,20 +45,18 @@ public:
     virtual void updateConsensusNodeInfo(dev::h512s const& _consensusNodes);
     virtual void updateStartAndEndIndex();
 
-    template <typename T>
-    dev::h512s selectNodes(T const& peers);
+    dev::h512s selectNodes(std::set<dev::h512s> const& peers);
 
 private:
     bool getNodeIDByIndex(dev::h512& nodeID, ssize_t const& nodeIndex) const;
-    template <typename T>
-    ssize_t getNodeIndexByNodeId(T const& findSet, dev::h512& nodeId, SharedMutex& mutex);
 
-    template <typename T>
-    void recursiveSelectChildNodes(
-        dev::h512s& selectedNodeList, ssize_t const& parentIndex, T const& peers);
+    ssize_t getNodeIndexByNodeId(
+        std::set<dev::h512s> const& findSet, dev::h512& nodeId, SharedMutex& mutex);
 
-    template <typename T>
-    void selectParentNodes(dev::h512s& selectedNodeList, T const& peers);
+    void recursiveSelectChildNodes(dev::h512s& selectedNodeList, ssize_t const& parentIndex,
+        std::set<dev::h512s> const& peers);
+
+    void selectParentNodes(dev::h512s& selectedNodeList, std::set<dev::h512s> const& peers);
 
 private:
     mutable SharedMutex x_nodeList;
