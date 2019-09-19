@@ -252,10 +252,10 @@ void SyncMaster::maintainBlocks()
 
 void SyncMaster::sendSyncStatusByTree(BlockNumber const& blockNumber, h256 const& currentHash)
 {
-    auto selectedNodes = m_syncTreeRouter->selectNode(m_syncStatus->peersSet());
+    dev::h512s selectedNodes = m_syncTreeRouter->selectNode(m_syncStatus->peersSet());
     for (auto const nodeId : selectedNodes)
     {
-        sendSyncStatusByNodeId(blockNumber, currentHash);
+        sendSyncStatusByNodeId(blockNumber, currentHash, nodeId);
     }
 }
 

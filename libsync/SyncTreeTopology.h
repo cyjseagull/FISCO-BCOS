@@ -64,7 +64,7 @@ private:
     mutable SharedMutex x_nodeList;
     // the nodeList include both the consensus nodes and the observer nodes
     dev::h512s m_nodeList;
-    std::atomic<uint64_t> m_nodeNum = {0};
+    std::atomic<int64_t> m_nodeNum = {0};
 
     mutable SharedMutex x_currentConsensusNodes;
     // the current consensusList

@@ -86,7 +86,11 @@ void SyncTreeTopology::updateStartAndEndIndex()
     {
         m_startIndex = (m_nodeIndex / slotSize) * slotSize;
     }
-    auto endIndex = m_startIndex + slotSize - 1;
+    int64_t endIndex = m_startIndex + slotSize - 1;
+    if (endIndex > (m_nodeNum - 1))
+    {
+        endIndex = m_nodeNum - 1;
+    }
     m_endIndex = (m_nodeNum - endIndex <= slotSize) ? (m_nodeNum - 1) : endIndex;
 
     SYNCTREE_LOG(DEBUG) << LOG_DESC("updateStartAndEndIndex") << LOG_KV("startIndex", m_startIndex)
@@ -205,4 +209,5 @@ dev::h512s SyncTreeTopology::selectNodes(T const& peers)
     }
     // find the parent nodes
     selectParentNodes(selectedNodeList, peers);
+    return selectedNodeList;
 }
