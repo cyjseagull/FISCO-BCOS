@@ -75,7 +75,7 @@ public:
         return selectedNode;
     }
 
-    dev::h512s consensusList() consensusList override
+    dev::h512s consensusList() const override
     {
         ReadGuard l(x_consensusVec);
         return m_consensusVec;
