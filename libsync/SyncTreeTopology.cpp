@@ -100,7 +100,7 @@ void SyncTreeTopology::updateStartAndEndIndex()
 
 template <typename T>
 ssize_t SyncTreeTopology::getNodeIndexByNodeId(
-    std::set<dev::h512s> const& findSet, dev::h512& nodeId, SharedMutex& mutex)
+    std::set<dev::h512> const& findSet, dev::h512& nodeId, SharedMutex& mutex)
 {
     ssize_t nodeIndex = -1;
     ReadGuard l(mutex);
@@ -129,7 +129,7 @@ bool SyncTreeTopology::getNodeIDByIndex(h512& nodeID, ssize_t const& nodeIndex) 
 }
 
 void SyncTreeTopology::recursiveSelectChildNodes(
-    h512s& selectedNodeList, ssize_t const& parentIndex, std::set<dev::h512s> const& peers)
+    h512s& selectedNodeList, ssize_t const& parentIndex, std::set<dev::h512> const& peers)
 {
     dev::h512 selectedNode;
     for (ssize_t i = 1; i < m_treeWidth; i++)
@@ -156,7 +156,7 @@ void SyncTreeTopology::recursiveSelectChildNodes(
 }
 
 void SyncTreeTopology::selectParentNodes(
-    dev::h512s& selectedNodeList, std::set<dev::h512s> const& peers)
+    dev::h512s& selectedNodeList, std::set<dev::h512> const& peers)
 {
     // push all other consensus node to the selectedNodeList if this node is the consensus node
     if (m_consIndex > 0)
@@ -192,7 +192,7 @@ void SyncTreeTopology::selectParentNodes(
 }
 
 
-dev::h512s SyncTreeTopology::selectNodes(std::set<dev::h512s> const& peers)
+dev::h512s SyncTreeTopology::selectNodes(std::set<dev::h512> const& peers)
 {
     dev::h512s selectedNodeList;
 
