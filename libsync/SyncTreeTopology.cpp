@@ -33,7 +33,7 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
             return;
         }
         // update the nodeNum
-        auto nodeNum = _nodeList.size();
+        int64_t nodeNum = _nodeList.size();
         if (m_nodeNum != nodeNum)
         {
             m_nodeNum = nodeNum;

@@ -252,7 +252,7 @@ void SyncMaster::maintainBlocks()
 
 void SyncMaster::sendSyncStatusByTree(BlockNumber const& blockNumber, h256 const& currentHash)
 {
-    dev::h512s selectedNodes = m_syncTreeRouter->selectNode(m_syncStatus->peersSet());
+    dev::h512s selectedNodes = m_syncTreeRouter->selectNodes(m_syncStatus->peersSet());
     for (auto const nodeId : selectedNodes)
     {
         sendSyncStatusByNodeId(blockNumber, currentHash, nodeId);
@@ -293,7 +293,7 @@ bool SyncMaster::sendSyncStatusByNodeId(
         nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
 
     SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
-                    << LOG_KV("number", int(number))
+                    << LOG_KV("number", blockNumber)
                     << LOG_KV("genesisHash", m_genesisHash.abridged())
                     << LOG_KV("currentHash", currentHash.abridged())
                     << LOG_KV("peer", nodeId.abridged());
