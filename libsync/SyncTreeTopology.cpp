@@ -52,6 +52,7 @@ void SyncTreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes
 {
     {
         ReadGuard l(x_currentConsensusNodes);
+        std::sort(_consensusNodes.begin(), _consensusNodes.end());
         if (m_currentConsensusNodes == _consensusNodes)
         {
             return;

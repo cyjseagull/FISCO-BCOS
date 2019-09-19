@@ -51,12 +51,15 @@ void RotatingPBFTEngine::updateConsensusList()
     {
         for (auto index = 0; index < m_groupSize; index++)
         {
+            m_consensusVec.clear();
             NodeID nodeId;
             if (getNodeIDByIndex(nodeId, index))
             {
                 m_consensusList.insert(nodeId);
+                m_consensusVec.push_back(nodeId);
                 m_consensusIdList.push_back(index);
             }
+            m_blockSync->updateConsensusNodeInfo(m_consensusVec);
         }
     }
 
