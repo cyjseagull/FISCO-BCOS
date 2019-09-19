@@ -73,7 +73,6 @@ private:
     std::atomic<int64_t> m_consIndex = {0};
     std::atomic<int64_t> m_endIndex = {0};
     std::atomic<int64_t> m_startIndex = {0};
-    std::atomic_bool m_needUpdateIndex = {false};
 };
 }  // namespace sync
 }  // namespace dev

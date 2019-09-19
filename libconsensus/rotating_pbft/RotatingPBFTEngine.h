@@ -75,6 +75,12 @@ public:
         return selectedNode;
     }
 
+    dev::h512s consensusList() consensusList override
+    {
+        ReadGuard l(x_consensusVec);
+        return m_consensusVec;
+    }
+
 protected:
     void resetConfig() override;
     virtual void updateConsensusList();
@@ -92,6 +98,9 @@ protected:
     std::atomic<int64_t> m_lastGroup = {-1};
 
     std::set<dev::h512> m_consensusList;
+
+    mutable SharedMutex x_consensusVec;
+    h512s m_consensusVec;
 
     mutable SharedMutex x_consensusListMutex;
     std::list<IDXTYPE> m_consensusIdList;

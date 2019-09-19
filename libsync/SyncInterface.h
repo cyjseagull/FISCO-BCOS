@@ -65,7 +65,8 @@ public:
     {}
 
     virtual void printNetworkStatisticInfo() {}
-    virtual void updateNodeInfo(dev::h512s const&, dev::h512s const&) {}
+    virtual void updateNodeListInfo(dev::h512s const&) {}
+    virtual void updateConsensusNodeInfo(dev::h512s const&) {}
 };
 
 }  // namespace sync

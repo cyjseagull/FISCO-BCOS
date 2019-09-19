@@ -411,6 +411,8 @@ protected:
     void updateOutNetworkInfo(
         uint8_t const& packetType, uint64_t sessionSize, uint64_t const& length);
 
+    virtual dev::h512s consensusList() const { return sealerList(); }
+
 private:
     bool blockExists(h256 const& blockHash)
     {

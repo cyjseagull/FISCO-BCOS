@@ -173,11 +173,14 @@ public:
     bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
         dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
 
-    void updateNodeInfo(dev::h512s const& _nodeList, dev::h512s const& _consensusNodes) override
+    void updateNodeListInfo(dev::h512s const& _nodeList) override
     {
         m_syncTreeRouter->updateNodeListInfo(_nodeList);
+    }
+
+    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes) override
+    {
         m_syncTreeRouter->updateConsensusNodeInfo(_consensusNodes);
-        m_syncTreeRouter->updateStartAndEndIndex();
     }
 
     // init via blockchain when the sync thread started
@@ -188,7 +191,8 @@ public:
         auto observerList = m_blockChain->observerList();
         auto nodeList = sealerList + observerList;
         std::sort(nodeList.begin(), nodeList.end());
-        updateNodeInfo(nodeList, sealerList);
+        updateNodeListInfo(nodeList);
+        updateConsensusNodeInfo(sealerList);
     }
 
 private:

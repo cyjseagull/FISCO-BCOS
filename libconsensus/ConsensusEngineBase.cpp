@@ -163,8 +163,10 @@ void ConsensusEngineBase::updateConsensusNodeList()
             dev::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
             std::sort(sealerList.begin(), sealerList.end());
+
             // update the requiredInfo for treeTopologyRouter
-            m_blockSync->updateNodeInfo(nodeList, sealerList);
+            m_blockSync->updateNodeListInfo(nodeList);
+            m_blockSync->updateConsensusNodeInfo(consensusList());
 
             // update the p2p nodeList
             updateNodeListInP2P(nodeList);

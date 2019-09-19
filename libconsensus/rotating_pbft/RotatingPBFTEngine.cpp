@@ -86,6 +86,18 @@ void RotatingPBFTEngine::updateConsensusList()
     }
     m_lastGroup = currentGroup;
     m_leaderFailed = false;
+
+    {
+        WriteGuard l(x_consensusVec);
+        m_consensusVec.clear();
+        for (auto const& it : m_consensusList)
+        {
+            m_consensusVec.push_back(it);
+        }
+    }
+    // update the consensusNodeInfo
+    m_blockSync->updateConsensusNodeInfo(m_consensusVec);
+
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList") << LOG_KV("curNumber", blockNumber)
                            << LOG_KV("removeIndex", removeIndex)
                            << LOG_KV("removeNode", removeNodeId.abridged())

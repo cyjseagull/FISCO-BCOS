@@ -45,7 +45,7 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
     }
     // update the nodeIndex
     m_nodeIndex = getNodeIndexByNodeId(m_nodeList, m_nodeId, x_nodeList);
-    m_needUpdateIndex = true;
+    updateStartAndEndIndex();
 }
 
 void SyncTreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
@@ -62,15 +62,26 @@ void SyncTreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes
         m_currentConsensusNodes = _consensusNodes;
     }
     m_consIndex = getNodeIndexByNodeId(m_currentConsensusNodes, m_nodeId, x_currentConsensusNodes);
-    m_needUpdateIndex = true;
+    updateStartAndEndIndex();
 }
 
 void SyncTreeTopology::updateStartAndEndIndex()
 {
-    if (!m_needUpdateIndex)
     {
-        return;
+        ReadGuard l(x_currentConsensusNodes);
+        if (m_currentConsensusNodes.size() == 0)
+        {
+            return;
+        }
     }
+    {
+        ReadGuard l(x_nodeList);
+        if (m_nodeList.size() == 0)
+        {
+            return;
+        }
+    }
+
     int64_t consensusNodeSize = 0;
     {
         ReadGuard l(x_currentConsensusNodes);
@@ -95,7 +106,6 @@ void SyncTreeTopology::updateStartAndEndIndex()
 
     SYNCTREE_LOG(DEBUG) << LOG_DESC("updateStartAndEndIndex") << LOG_KV("startIndex", m_startIndex)
                         << LOG_KV("endIndex", m_endIndex);
-    m_needUpdateIndex = false;
 }
 
 ssize_t SyncTreeTopology::getNodeIndexByNodeId(
