@@ -98,9 +98,8 @@ void SyncTreeTopology::updateStartAndEndIndex()
     m_needUpdateIndex = false;
 }
 
-template <typename T>
 ssize_t SyncTreeTopology::getNodeIndexByNodeId(
-    std::set<dev::h512> const& findSet, dev::h512& nodeId, SharedMutex& mutex)
+    dev::h512s const& findSet, dev::h512& nodeId, SharedMutex& mutex)
 {
     ssize_t nodeIndex = -1;
     ReadGuard l(mutex);

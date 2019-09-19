@@ -50,11 +50,10 @@ public:
 private:
     bool getNodeIDByIndex(dev::h512& nodeID, ssize_t const& nodeIndex) const;
 
-    ssize_t getNodeIndexByNodeId(
-        std::set<dev::h512> const& findSet, dev::h512& nodeId, SharedMutex& mutex);
+    ssize_t getNodeIndexByNodeId(dev::h512s const& findSet, dev::h512& nodeId, SharedMutex& mutex);
 
-    void recursiveSelectChildNodes(dev::h512s& selectedNodeList, ssize_t const& parentIndex,
-        std::set<dev::h512> const& peers);
+    void recursiveSelectChildNodes(
+        dev::h512s& selectedNodeList, ssize_t const& parentIndex, std::set<dev::h512> const& peers);
 
     void selectParentNodes(dev::h512s& selectedNodeList, std::set<dev::h512> const& peers);
 
