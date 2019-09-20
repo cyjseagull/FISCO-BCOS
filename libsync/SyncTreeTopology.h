@@ -66,7 +66,7 @@ private:
     mutable SharedMutex x_currentConsensusNodes;
     // the current consensusList
     dev::h512s m_currentConsensusNodes;
-    unsigned m_treeWidth = 3;
+    unsigned m_treeWidth = 2;
 
     dev::h512 m_nodeId;
     std::atomic<int64_t> m_nodeIndex = {0};

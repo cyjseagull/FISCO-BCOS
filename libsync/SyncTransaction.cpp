@@ -114,6 +114,10 @@ void SyncTransaction::maintainTransactions()
     {
         auto const& t = ts[i];
         NodeIDs peers;
+        if (m_txPool->isTransactionKnownBySomeone(t.sha3()))
+        {
+            continue;
+        }
         peers = m_syncStatus->selectTargetToReceiveTrans(
             targetNodes, [&](std::shared_ptr<SyncPeerStatus> _p) {
                 bool unsent = !m_txPool->isTransactionKnownBy(t.sha3(), m_nodeId);
