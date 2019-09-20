@@ -59,6 +59,7 @@ public:
     virtual uint64_t maxBlockTransactions() { return 1000; }
 
     virtual void setBlockFactory(std::shared_ptr<dev::eth::BlockFactory>) {}
+    virtual bool isFarSyncing() { return false; }
 };
 }  // namespace consensus
 }  // namespace dev

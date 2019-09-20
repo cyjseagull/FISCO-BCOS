@@ -196,7 +196,8 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
-    // only drop the transactions when the block height of this node falls behind a log
+// only drop the transactions when the block height of this node falls behind a log
+#if 0
     if (isFarSyncing())
     {
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Tx")
@@ -204,6 +205,7 @@ void SyncMsgEngine::onPeerTransactions(SyncMsgPacket const& _packet)
                                << LOG_KV("fromNodeId", _packet.nodeId.abridged());
         return;
     }
+#endif
 
     RLP const& rlps = _packet.rlp();
     m_txQueue->push(rlps.data(), _packet.nodeId);

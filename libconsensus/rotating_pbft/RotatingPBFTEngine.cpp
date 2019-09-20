@@ -49,9 +49,9 @@ void RotatingPBFTEngine::updateConsensusList()
     // reset consensusList
     if (blockNumber == 0 && m_consensusList.size() == 0 && m_consensusIdList.size() == 0)
     {
+        m_consensusVec.clear();
         for (auto index = 0; index < m_groupSize; index++)
         {
-            m_consensusVec.clear();
             NodeID nodeId;
             if (getNodeIDByIndex(nodeId, index))
             {
@@ -59,8 +59,13 @@ void RotatingPBFTEngine::updateConsensusList()
                 m_consensusVec.push_back(nodeId);
                 m_consensusIdList.push_back(index);
             }
-            m_blockSync->updateConsensusNodeInfo(m_consensusVec);
         }
+        std::sort(m_consensusVec.begin(), m_consensusVec.end());
+        m_blockSync->updateConsensusNodeInfo(m_consensusVec);
+    }
+    if (m_consensusIdList.count(m_keyPair.pub()))
+    {
+        m_processConsensus = true;
     }
 
     int64_t currentGroup = blockNumber / m_rotatingInterval;
@@ -97,9 +102,15 @@ void RotatingPBFTEngine::updateConsensusList()
         {
             m_consensusVec.push_back(it);
         }
+        std::sort(m_consensusVec.begin(), m_consensusVec.end());
     }
     // update the consensusNodeInfo
     m_blockSync->updateConsensusNodeInfo(m_consensusVec);
+
+    if (m_consensusList.count(m_keyPair.pub()))
+    {
+        m_processConsensus = true;
+    }
 
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusList") << LOG_KV("curNumber", blockNumber)
                            << LOG_KV("removeIndex", removeIndex)

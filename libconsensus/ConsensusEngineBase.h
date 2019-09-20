@@ -412,6 +412,7 @@ protected:
         uint8_t const& packetType, uint64_t sessionSize, uint64_t const& length);
 
     virtual dev::h512s consensusList() const { return sealerList(); }
+    virtual bool isFarSyncing() { return m_blockSync->isFarSyncing(); }
 
 private:
     bool blockExists(h256 const& blockHash)

@@ -89,8 +89,8 @@ void Rpc::checkRequest(int _groupID)
 void Rpc::checkTxReceive(int _groupID)
 {
     // Refuse transaction if far syncing
-    auto sync = ledgerManager()->sync(_groupID);
-    if (sync->isFarSyncing())
+    auto consEngine = ledgerManager()->consensus(_groupID);
+    if (consEngine->isFarSyncing())
     {
         BOOST_THROW_EXCEPTION(
             TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));

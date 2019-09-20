@@ -52,7 +52,6 @@ void SyncTreeTopology::updateConsensusNodeInfo(dev::h512s const& _consensusNodes
 {
     {
         ReadGuard l(x_currentConsensusNodes);
-        std::sort(_consensusNodes.begin(), _consensusNodes.end());
         if (m_currentConsensusNodes == _consensusNodes)
         {
             return;
@@ -106,7 +105,8 @@ void SyncTreeTopology::updateStartAndEndIndex()
     m_endIndex = (m_nodeNum - endIndex <= slotSize) ? (m_nodeNum - 1) : endIndex;
 
     SYNCTREE_LOG(DEBUG) << LOG_DESC("updateStartAndEndIndex") << LOG_KV("startIndex", m_startIndex)
-                        << LOG_KV("endIndex", m_endIndex);
+                        << LOG_KV("endIndex", m_endIndex) << LOG_KV("slotSize", slotSize)
+                        << LOG_KV("nodeNum", m_nodeNum) << LOG_KV("consNum", consensusNodeSize);
 }
 
 ssize_t SyncTreeTopology::getNodeIndexByNodeId(
@@ -114,7 +114,7 @@ ssize_t SyncTreeTopology::getNodeIndexByNodeId(
 {
     ssize_t nodeIndex = -1;
     ReadGuard l(mutex);
-    for (ssize_t i = 0; i < m_nodeNum; i++)
+    for (ssize_t i = 0; i < (ssize_t)findSet.size(); i++)
     {
         if (nodeId == findSet[i])
         {
@@ -142,9 +142,9 @@ void SyncTreeTopology::recursiveSelectChildNodes(
     h512s& selectedNodeList, ssize_t const& parentIndex, std::set<dev::h512> const& peers)
 {
     dev::h512 selectedNode;
-    for (ssize_t i = 1; i < m_treeWidth; i++)
+    for (ssize_t i = 0; i < m_treeWidth; i++)
     {
-        ssize_t expectedIndex = parentIndex * m_treeWidth + i;
+        ssize_t expectedIndex = (parentIndex - m_startIndex) * m_treeWidth + i + m_startIndex;
         if (expectedIndex > m_endIndex)
         {
             break;
@@ -160,7 +160,7 @@ void SyncTreeTopology::recursiveSelectChildNodes(
         // the child node doesn't exit in the peers, select the grand child recursively
         else
         {
-            recursiveSelectChildNodes(selectedNodeList, expectedIndex, peers);
+            recursiveSelectChildNodes(selectedNodeList, expectedIndex + 1, peers);
         }
     }
 }
@@ -209,7 +209,7 @@ dev::h512s SyncTreeTopology::selectNodes(std::set<dev::h512> const& peers)
     // the node is the consensusNode, chose the childNode
     if (m_consIndex > 0)
     {
-        recursiveSelectChildNodes(selectedNodeList, m_consIndex, peers);
+        recursiveSelectChildNodes(selectedNodeList, m_startIndex, peers);
     }
     // the node is not the consensusNode
     else

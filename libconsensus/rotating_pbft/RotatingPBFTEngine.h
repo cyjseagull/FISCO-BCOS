@@ -81,6 +81,8 @@ public:
         return m_consensusVec;
     }
 
+    bool isFarSyncing() override { return m_blockSync->isFarSyncing() && m_processConsensus; }
+
 protected:
     void resetConfig() override;
     virtual void updateConsensusList();
@@ -101,6 +103,8 @@ protected:
 
     mutable SharedMutex x_consensusVec;
     h512s m_consensusVec;
+
+    std::atomic_bool m_processConsensus = {false};
 
     mutable SharedMutex x_consensusListMutex;
     std::list<IDXTYPE> m_consensusIdList;

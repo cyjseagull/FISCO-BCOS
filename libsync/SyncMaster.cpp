@@ -698,6 +698,8 @@ void SyncMaster::maintainBlockRequest()
                 blockContainer.batchAndSend(blockRLP);
                 m_sendedBlockBytes += blockRLP->size();
                 m_sendedBlockCount += 1;
+                printNetworkStatisticInfo();
+                m_service->printNetworkStatisticInfo();
             }
 
             if (number < numberLimit)  // This respond not reach the end due to timeout
