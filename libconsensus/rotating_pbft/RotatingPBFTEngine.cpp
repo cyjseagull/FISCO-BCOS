@@ -62,10 +62,10 @@ void RotatingPBFTEngine::updateConsensusList()
         }
         std::sort(m_consensusVec.begin(), m_consensusVec.end());
         m_blockSync->updateConsensusNodeInfo(m_consensusVec);
-    }
-    if (m_consensusIdList.count(m_keyPair.pub()))
-    {
-        m_processConsensus = true;
+        if (m_consensusList.count(m_keyPair.pub()))
+        {
+            m_processConsensus = true;
+        }
     }
 
     int64_t currentGroup = blockNumber / m_rotatingInterval;
