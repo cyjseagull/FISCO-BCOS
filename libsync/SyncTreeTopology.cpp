@@ -182,14 +182,14 @@ void SyncTreeTopology::selectParentNodes(
         return;
     }
     // find the parentNode if this node is not the consensus node
-    ssize_t parentIndex = (m_nodeIndex - 1) / m_treeWidth;
+    ssize_t parentIndex = (m_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
     // the parentNode is the node-slef
     if (parentIndex == m_nodeIndex)
     {
         return;
     }
     dev::h512 selectedNode;
-    while (parentIndex > m_startIndex)
+    while (parentIndex > m_startIndex + m_treeWidth)
     {
         // find the parentNode from the peers
         if (getNodeIDByIndex(selectedNode, parentIndex) && peers.count(selectedNode))
@@ -197,7 +197,7 @@ void SyncTreeTopology::selectParentNodes(
             selectedNodeList.push_back(selectedNode);
             break;
         }
-        parentIndex = (parentIndex - 1) / m_treeWidth;
+        parentIndex = (m_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
     }
 }
 

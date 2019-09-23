@@ -113,7 +113,7 @@ void SyncMasterStatus::foreachPeer(
 }
 
 void SyncMasterStatus::forRandomNeighbor(
-    int64_t const& neighborSize std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f)
+    int64_t const& neighborSize, std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f)
 {
     NodeIDs nodeIds;
     {
@@ -124,8 +124,8 @@ void SyncMasterStatus::forRandomNeighbor(
         }
     }
     std::srand(std::time(nullptr));
-    int64_t selectedSize = neighborSize > nodeIds.size() ? nodeIds.size() : neighborSize;
-    int64_t randomRange = nodeIds.size() - 1;
+    int64_t randomRange = nodeIds.size();
+    int64_t selectedSize = neighborSize > randomRange ? randomRange : neighborSize;
     NodeID selectedNode;
     for (auto i = 0; i < selectedSize; i++)
     {

@@ -43,7 +43,6 @@ class P2PMessage;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    using Ptr = std::shared_ptr<Service>;
     Service();
     virtual ~Service() { stop(); }
 

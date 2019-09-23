@@ -761,16 +761,17 @@ void SyncMaster::gossipSyncStatus()
 
 void SyncMaster::startGossipThread()
 {
-    std::weak_ptr<SyncMaster> self(std::dynamic_pointer_cast<SyncMaster>(std::shared_from_this()));
+    std::weak_ptr<SyncMaster> self(std::dynamic_pointer_cast<SyncMaster>(shared_from_this()));
     m_gossipSyncStatusThread = std::make_shared<std::thread>([self]() {
         while (true)
         {
             auto syncMaster = self.lock();
-            if (syncMaster && syncMaster->m_running->load())
+            if (syncMaster && syncMaster->m_running.load())
             {
                 // gossip syncStatus every m_gossipInterval
-                gossipSyncStatus();
-                std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_gossipInterval));
+                syncMaster->gossipSyncStatus();
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(syncMaster->m_gossipInterval));
             }
             else
             {
