@@ -170,6 +170,8 @@ public:
     void broadcastSyncStatus(
         dev::eth::BlockNumber const& blockNumber, dev::h256 const& currentHash);
 
+    void gossipSyncStatus();
+
     bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
         dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
 
@@ -194,6 +196,10 @@ public:
         updateNodeListInfo(nodeList);
         updateConsensusNodeInfo(sealerList);
     }
+
+protected:
+    virtual void startGossipThread();
+    virtual void stopGossipThread();
 
 private:
     /// p2p service handler
@@ -245,8 +251,9 @@ private:
     SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;
 
     // maintain peer connections
-    std::shared_ptr<std::thread> m_maintainPeersConnsThread;
+    std::shared_ptr<std::thread> m_gossipSyncStatusThread;
     std::atomic_bool m_running = {false};
+    std::atomic<int64_t> m_gossipInterval = {1000};
 
     // settings
     dev::eth::Handler<int64_t> m_blockSubmitted;
@@ -257,6 +264,7 @@ private:
     std::atomic<uint64_t> m_sendedBlockCount = {0};
     std::atomic<uint64_t> m_sendedBlockBytes = {0};
 
+    std::int64_t m_gossipPeersNumber = 3;
 
 public:
     void maintainBlocks();

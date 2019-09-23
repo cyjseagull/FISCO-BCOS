@@ -103,9 +103,10 @@ string const SyncMaster::syncInfo() const
 
 void SyncMaster::start()
 {
-    m_running = true;
     startWorking();
     m_syncTrans->start();
+    m_running = true;
+    startGossipThread();
 }
 
 void SyncMaster::stop()
@@ -115,6 +116,8 @@ void SyncMaster::stop()
     stopWorking();
     // will not restart worker, so terminate it
     terminate();
+    m_running = false;
+    stopGossipThread();
 }
 
 void SyncMaster::doWork()
@@ -261,24 +264,6 @@ void SyncMaster::sendSyncStatusByTree(BlockNumber const& blockNumber, h256 const
 
 void SyncMaster::broadcastSyncStatus(BlockNumber const& blockNumber, h256 const& currentHash)
 {
-#if 0
- m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
-        SyncStatusPacket packet;
-        packet.encode(number, m_genesisHash, currentHash);
-
-        m_service->asyncSendMessageByNodeID(
-            _p->nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-
-        SYNC_LOG(DEBUG) << LOG_BADGE("Status")
-                        << LOG_DESC("Send current status when maintainBlocks")
-                        << LOG_KV("number", int(number))
-                        << LOG_KV("genesisHash", m_genesisHash.abridged())
-                        << LOG_KV("currentHash", currentHash.abridged())
-                        << LOG_KV("peer", _p->nodeId.abridged());
-
-        return true;
-    });
-#endif
     m_syncStatus->foreachPeer([&](shared_ptr<SyncPeerStatus> _p) {
         return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
     });
@@ -763,4 +748,50 @@ bool SyncMaster::isNextBlock(BlockPtr _block)
     }
 
     return true;
+}
+
+void SyncMaster::gossipSyncStatus()
+{
+    auto blockNumber = m_blockChain->number();
+    auto currentHash = m_blockChain->numberHash(blockNumber);
+    m_syncStatus->forRandomNeighbor(m_gossipPeersNumber, [&](shared_ptr<SyncPeerStatus> _p) {
+        return sendSyncStatusByNodeId(blockNumber, currentHash, _p->nodeId);
+    });
+}
+
+void SyncMaster::startGossipThread()
+{
+    std::weak_ptr<SyncMaster> self(std::dynamic_pointer_cast<SyncMaster>(std::shared_from_this()));
+    m_gossipSyncStatusThread = std::make_shared<std::thread>([self]() {
+        while (true)
+        {
+            auto syncMaster = self.lock();
+            if (syncMaster && syncMaster->m_running->load())
+            {
+                // gossip syncStatus every m_gossipInterval
+                gossipSyncStatus();
+                std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_gossipInterval));
+            }
+            else
+            {
+                return;
+            }
+        }
+    });
+}
+
+void SyncMaster::stopGossipThread()
+{
+    if (m_gossipSyncStatusThread)
+    {
+        if (m_gossipSyncStatusThread->get_id() != std::this_thread::get_id())
+        {
+            m_gossipSyncStatusThread->join();
+            m_gossipSyncStatusThread.reset();
+        }
+        else
+        {
+            m_gossipSyncStatusThread->detach();
+        }
+    }
 }

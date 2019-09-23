@@ -120,6 +120,8 @@ public:
     std::shared_ptr<SyncPeerStatus> peerStatus(NodeID const& _id);
 
     void foreachPeer(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
+    void forRandomNeighbor(int64_t const& neighborSize,
+        std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f);
 
     void foreachPeerRandom(std::function<bool(std::shared_ptr<SyncPeerStatus>)> const& _f) const;
 

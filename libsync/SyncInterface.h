@@ -31,6 +31,7 @@ struct SyncStatus;
 class SyncInterface
 {
 public:
+    using Ptr = std::shared_ptr<SyncInterface>;
     SyncInterface(){};
     virtual ~SyncInterface(){};
     /// start blockSync
