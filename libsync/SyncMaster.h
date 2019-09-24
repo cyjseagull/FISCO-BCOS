@@ -71,6 +71,7 @@ public:
             std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
         m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
             m_txQueue, _protocolId, _nodeId, _genesisHash);
+        m_msgEngine->onNotifyWorker([]() { m_signalled.notify_all(); });
 
         // signal registration
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
@@ -253,7 +254,8 @@ private:
     // maintain peer connections
     std::shared_ptr<std::thread> m_gossipSyncStatusThread;
     std::atomic_bool m_running = {false};
-    std::atomic<int64_t> m_gossipInterval = {1000};
+    std::atomic<int64_t> m_gossipInterval = {3000};
+    std::int64_t m_gossipPeersNumber = 2;
 
     // settings
     dev::eth::Handler<int64_t> m_blockSubmitted;
@@ -264,7 +266,6 @@ private:
     std::atomic<uint64_t> m_sendedBlockCount = {0};
     std::atomic<uint64_t> m_sendedBlockBytes = {0};
 
-    std::int64_t m_gossipPeersNumber = 3;
 
 public:
     void maintainBlocks();

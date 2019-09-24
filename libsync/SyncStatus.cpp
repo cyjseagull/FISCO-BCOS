@@ -232,3 +232,16 @@ NodeIDs SyncMasterStatus::randomSelectionSize(
     }
     return chosen;
 }
+
+bool SyncMasterStatus::noDownloadRequest()
+{
+    ReadGuard l(x_peerStatus);
+    for (auto const& status : m_peersStatus)
+    {
+        if (!status.second->reqQueue.empty())
+        {
+            return false;
+        }
+    }
+    return true;
+}

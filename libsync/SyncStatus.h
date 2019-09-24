@@ -138,6 +138,8 @@ public:
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
+    bool noDownloadRequest();
+
 public:
     h256 genesisHash;
     mutable SharedMutex x_known;

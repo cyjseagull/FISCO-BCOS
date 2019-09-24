@@ -135,23 +135,33 @@ void SyncMaster::doWork()
     maintainDownloadingQueueBuffer();
     auto maintainDownloadingQueueBuffer_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
+#if 0
+    if(!isSyncing())
+    {
+#endif
     maintainPeersStatus();
+#if 0
+    }
+#endif
     auto maintainPeersStatus_time_cost = utcTime() - record_time;
     record_time = utcTime();
     maintainBlocks();
     auto maintainBlocks_time_cost = utcTime() - record_time;
     record_time = utcTime();
     auto maintainBlockRequest_time_cost = 0;
-    // Idle do
+// Idle do
+#if 0
     if (!isSyncing())
     {
-        record_time = utcTime();
+#endif
+    record_time = utcTime();
 
-        maintainBlockRequest();
-        maintainBlockRequest_time_cost = utcTime() - record_time;
-        record_time = utcTime();
+    maintainBlockRequest();
+    maintainBlockRequest_time_cost = utcTime() - record_time;
+    record_time = utcTime();
+#if 0
     }
+#endif
 
     auto maintainDownloadingQueue_time_cost = 0;
     // Not Idle do
@@ -184,7 +194,10 @@ void SyncMaster::workLoop()
     while (workerState() == WorkerState::Started)
     {
         doWork();
-        if (idleWaitMs() && m_syncStatus->bq().empty())
+        // wait condition:
+        // 1. the downloading queue is empty
+        // 2. there are no sync requests from other nodes
+        if (idleWaitMs() && m_syncStatus->bq().empty() && m_syncStatus->noDownloadRequest())
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -434,6 +447,17 @@ bool SyncMaster::maintainDownloadingQueue()
 
     // pop block in sequence and ignore block which number is lower than currentNumber +1
     BlockPtr topBlock = bq.top();
+    if (topBlock && topBlock->header().number() > (m_blockChain->number() + 1))
+    {
+        SYNC_LOG(WARNING) << LOG_DESC("Discontinuous block")
+                          << LOG_KV("topNumber", topBlock->header().number())
+                          << LOG_KV("curNumber", m_blockChain->number());
+        if (m_syncStatus->noDownloadRequest())
+        {
+            std::unique_lock<std::mutex> l(x_signalled);
+            m_signalled.wait_for(l, std::chrono::milliseconds(1));
+        }
+    }
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
         try
@@ -646,10 +670,22 @@ void SyncMaster::maintainDownloadingQueueBuffer()
 void SyncMaster::maintainBlockRequest()
 {
     uint64_t timeout = utcTime() + c_respondDownloadRequestTimeout;
+    if (m_syncStatus->noDownloadRequest())
+    {
+        if (m_syncStatus->bq().empty())
+        {
+            std::unique_lock<std::mutex> l(x_signalled);
+            m_signalled.wait_for(l, std::chrono::milliseconds(1));
+        }
+        else
+        {
+            return;
+        }
+    }
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
-            return true;  // no need to respeond
+            return true;  // no need to respond
 
         // Just select one peer per maintain
         reqQueue.disablePush();  // drop push at this time

@@ -222,6 +222,11 @@ void SyncMsgEngine::onPeerBlocks(SyncMsgPacket const& _packet)
                            << LOG_KV("packetSize(B)", rlps.data().size());
 
     m_syncStatus->bq().push(rlps);
+    // notify sync master to solve DownloadingQueue
+    if (m_onNotifyWorker)
+    {
+        m_onNotifyWorker();
+    }
 }
 
 void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
@@ -255,7 +260,14 @@ void SyncMsgEngine::onPeerRequestBlocks(SyncMsgPacket const& _packet)
 
     auto peerStatus = m_syncStatus->peerStatus(_packet.nodeId);
     if (peerStatus != nullptr && peerStatus)
+    {
         peerStatus->reqQueue.push(from, (int64_t)size);
+        // notify sync master to handle block requests
+        if (m_onNotifyWorker)
+        {
+            m_onNotifyWorker();
+        }
+    }
 }
 
 void DownloadBlocksContainer::batchAndSend(BlockPtr _block)

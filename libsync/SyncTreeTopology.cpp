@@ -197,7 +197,7 @@ void SyncTreeTopology::selectParentNodes(
             selectedNodeList.push_back(selectedNode);
             break;
         }
-        parentIndex = (m_nodeIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
+        parentIndex = (parentIndex - m_startIndex) / m_treeWidth + m_startIndex - 1;
     }
 }
 
