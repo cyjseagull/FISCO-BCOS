@@ -71,7 +71,7 @@ public:
             std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
         m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
             m_txQueue, _protocolId, _nodeId, _genesisHash);
-        m_msgEngine->onNotifyWorker([]() { m_signalled.notify_all(); });
+        m_msgEngine->onNotifyWorker([&]() { m_signalled.notify_all(); });
 
         // signal registration
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
@@ -198,6 +198,11 @@ public:
         updateConsensusNodeInfo(sealerList);
     }
 
+    void setEachBlockDownloadingRequestTimeout(int64_t const& _eachBlockDownloadingRequestTimeout)
+    {
+        m_eachBlockDownloadingRequestTimeout = _eachBlockDownloadingRequestTimeout;
+    }
+
 protected:
     virtual void startGossipThread();
     virtual void stopGossipThread();
@@ -229,7 +234,9 @@ private:
 
     int64_t m_maxRequestNumber = 0;
     uint64_t m_lastDownloadingRequestTime = 0;
+    int64_t m_lastDownloadingBlockNumber = 0;
     int64_t m_currentSealingNumber = 0;
+    int64_t m_eachBlockDownloadingRequestTimeout = 1000;
 
     // Internal coding variable
     /// mutex to access m_signalled

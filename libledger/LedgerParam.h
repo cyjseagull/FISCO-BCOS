@@ -71,6 +71,7 @@ struct SyncParam
 {
     /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
+    int64_t downloadTimeout = 1000;
 };
 
 /// modification 2019.03.20: add timeStamp field to GenesisParam

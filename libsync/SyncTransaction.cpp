@@ -116,6 +116,7 @@ void SyncTransaction::maintainTransactions()
         NodeIDs peers;
         if (m_txPool->isTransactionKnownBySomeone(t.sha3()))
         {
+            m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
             continue;
         }
         peers = m_syncStatus->selectTargetToReceiveTrans(

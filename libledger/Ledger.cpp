@@ -350,9 +350,16 @@ void Ledger::initSyncConfig(ptree const& pt)
             BOOST_THROW_EXCEPTION(ForbidNegativeValue()
                                   << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
         }
+        m_param->mutableSyncParam().downloadTimeout = pt.get<signed>("sync.download_timeout", 1000);
+        if (m_param->mutableSyncParam().downloadTimeout < 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set sync.download_timeout to positive !"));
+        }
 
         Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
-                          << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
+                          << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs)
+                          << LOG_KV("downloadTimeout", m_param->mutableSyncParam().downloadTimeout);
     }
     catch (std::exception& e)
     {
@@ -779,6 +786,7 @@ bool Ledger::initSync()
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+    m_sync->setEachBlockDownloadingRequestTimeout(m_param->mutableSyncParam().downloadTimeout);
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

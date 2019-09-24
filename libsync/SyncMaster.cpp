@@ -197,7 +197,7 @@ void SyncMaster::workLoop()
         // wait condition:
         // 1. the downloading queue is empty
         // 2. there are no sync requests from other nodes
-        if (idleWaitMs() && m_syncStatus->bq().empty() && m_syncStatus->noDownloadRequest())
+        if (idleWaitMs())
         {
             std::unique_lock<std::mutex> l(x_signalled);
             m_signalled.wait_for(l, std::chrono::milliseconds(idleWaitMs()));
@@ -300,6 +300,27 @@ bool SyncMaster::sendSyncStatusByNodeId(
 
 void SyncMaster::maintainPeersStatus()
 {
+    if (isSyncing())
+    {
+        // Skip downloading if last if not timeout
+        uint64_t currentTime = utcTime();
+        if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
+            (int64_t)m_eachBlockDownloadingRequestTimeout *
+                (m_maxRequestNumber - m_lastDownloadingBlockNumber))
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
+                            << LOG_KV("maxRequestNumber", m_maxRequestNumber)
+                            << LOG_KV("lastDownloadingBlockNumber", m_lastDownloadingBlockNumber);
+            return;  // no need to sync
+        }
+        else
+        {
+            SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("timeout and request a new block")
+                            << LOG_KV("maxRequestNumber", m_maxRequestNumber)
+                            << LOG_KV("lastDownloadingBlockNumber", m_lastDownloadingBlockNumber);
+        }
+    }
+
     // need download? ->set syncing and knownHighestNumber
     int64_t currentNumber = m_blockChain->number();
     int64_t maxPeerNumber = 0;
@@ -344,19 +365,8 @@ void SyncMaster::maintainPeersStatus()
         }
     }
 
-    // Skip downloading if last if not timeout
-
-    uint64_t currentTime = utcTime();
-    if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
-        (int64_t)c_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
-    {
-        SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
-                        << LOG_KV("currentNumber", currentNumber)
-                        << LOG_KV("maxRequestNumber", m_maxRequestNumber)
-                        << LOG_KV("maxPeerNumber", maxPeerNumber);
-        return;  // no need to sync
-    }
     m_lastDownloadingRequestTime = currentTime;
+    m_lastDownloadingBlockNumber = currentNumber;
 
     // Start download
     noteDownloadingBegin();
@@ -438,7 +448,6 @@ bool SyncMaster::maintainDownloadingQueue()
 {
     int64_t currentNumber = m_blockChain->number();
     DownloadingBlockQueue& bq = m_syncStatus->bq();
-    ;
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
         bq.clear();
@@ -452,11 +461,6 @@ bool SyncMaster::maintainDownloadingQueue()
         SYNC_LOG(WARNING) << LOG_DESC("Discontinuous block")
                           << LOG_KV("topNumber", topBlock->header().number())
                           << LOG_KV("curNumber", m_blockChain->number());
-        if (m_syncStatus->noDownloadRequest())
-        {
-            std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(1));
-        }
     }
     while (topBlock != nullptr && topBlock->header().number() <= (m_blockChain->number() + 1))
     {
@@ -670,18 +674,6 @@ void SyncMaster::maintainDownloadingQueueBuffer()
 void SyncMaster::maintainBlockRequest()
 {
     uint64_t timeout = utcTime() + c_respondDownloadRequestTimeout;
-    if (m_syncStatus->noDownloadRequest())
-    {
-        if (m_syncStatus->bq().empty())
-        {
-            std::unique_lock<std::mutex> l(x_signalled);
-            m_signalled.wait_for(l, std::chrono::milliseconds(1));
-        }
-        else
-        {
-            return;
-        }
-    }
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
