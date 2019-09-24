@@ -300,10 +300,10 @@ bool SyncMaster::sendSyncStatusByNodeId(
 
 void SyncMaster::maintainPeersStatus()
 {
+    uint64_t currentTime = utcTime();
     if (isSyncing())
     {
         // Skip downloading if last if not timeout
-        uint64_t currentTime = utcTime();
         if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
             (int64_t)m_eachBlockDownloadingRequestTimeout *
                 (m_maxRequestNumber - m_lastDownloadingBlockNumber))

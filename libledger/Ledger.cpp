@@ -784,9 +784,10 @@ bool Ledger::initSync()
     }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
-    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
+    auto sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
         protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
-    m_sync->setEachBlockDownloadingRequestTimeout(m_param->mutableSyncParam().downloadTimeout);
+    sync->setEachBlockDownloadingRequestTimeout(m_param->mutableSyncParam().downloadTimeout);
+    m_sync = sync;
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }
