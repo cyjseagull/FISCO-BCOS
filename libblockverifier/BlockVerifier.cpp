@@ -125,14 +125,17 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
+        std::shared_ptr<TransactionReceipts> receiptListPtr =
+            std::make_shared<TransactionReceipts>();
         for (size_t i = 0; i < block.transactions()->size(); i++)
         {
             auto& tx = (*block.transactions())[i];
 
             TransactionReceipt::Ptr resultReceipt = execute(tx, executiveContext, executive);
-            block.setTransactionReceipt(i, resultReceipt);
+            receiptListPtr->push_back(resultReceipt);
             executiveContext->getState()->commit();
         }
+        block.setTransactionReceipts(receiptListPtr);
     }
     catch (exception& e)
     {
@@ -253,14 +256,15 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(executiveContext, block.transactions(), block.blockHeader().number());
 
-
+    std::shared_ptr<TransactionReceipts> receiptListPtr = std::make_shared<TransactionReceipts>();
+    receiptListPtr->resize(block.getTransactionSize());
     txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, Executive::Ptr _executive) {
         auto resultReceipt = execute(_tr, executiveContext, _executive);
-
-        block.setTransactionReceipt(_txId, resultReceipt);
+        (*receiptListPtr)[_txId] = resultReceipt;
         executiveContext->getState()->commit();
         return true;
     });
+    block.setTransactionReceipts(receiptListPtr);
     auto initDag_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
