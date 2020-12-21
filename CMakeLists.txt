@@ -42,6 +42,7 @@ include(CompilerSettings)
 include(Dependencies)
 
 # install dependencies
+include(ProjectProtocolBuffer)
 include(ProjectTBB)
 include(ProjectSnappy)
 include(ProjectRocksDB)
