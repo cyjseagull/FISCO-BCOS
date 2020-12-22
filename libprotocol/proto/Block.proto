@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package bcos.protocol;
+
+import "BlockHeader.proto";
+import "Transaction.proto";
+import "TransactionReceipt.proto";
+
+message BlockPB
+{
+    BlockHeaderPB blockHeader = 1;
+    repeated TransactionPB transactions = 2;
+    repeated TransactionReceiptPB TransactionReceipts = 3;
+    repeated SignaturePB signatureList = 4;
+}

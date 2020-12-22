@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package bcos.protocol;
+
+message BlockHeaderPB
+{
+    int32 version = 1;
+    bytes parentHash = 2;
+    bytes stateRoot = 3;
+    bytes transactionRoot = 4;
+    bytes receiptRoot = 5;
+    bytes dbHash = 6;
+    bytes logBloom = 7;
+    int64 blockNumber = 8;
+    string gasLimit = 9;
+    string gasUsed = 10;
+    int64 timestamp = 11;
+    bytes extraData = 12;
+    int64 sealerIdx = 13;
+    bytes sealerList = 14; 
+}

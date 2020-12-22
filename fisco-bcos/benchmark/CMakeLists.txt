@@ -27,3 +27,12 @@ target_link_libraries(storage_benchmark PUBLIC initializer storage)
 
 add_executable(table_benchmark table_benchmark.cpp ${HEADERS})
 target_link_libraries(table_benchmark PUBLIC initializer storage)
+
+add_executable(block_benchmark block_benchmark.cpp ${HEADERS})
+target_link_libraries(block_benchmark PUBLIC utilities protocol)
+
+add_executable(block_pb_benchmark block_pb_benchmark.cpp ${HEADERS})
+target_link_libraries(block_pb_benchmark PUBLIC PROTOBUF utilities protocol)
+
+add_executable(block_pb_parallel_benchmark block_pb_parallel_benchmark.cpp ${HEADERS})
+target_link_libraries(block_pb_parallel_benchmark PUBLIC PROTOBUF utilities protocol TBB)

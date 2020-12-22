@@ -1,6 +1,8 @@
-file(GLOB SRC_LIST "*.cpp")
+aux_source_directory(. SRC_LIST)
 file(GLOB HEADERS "*.h")
 
-add_library(protocol ${SRC_LIST} ${HEADERS})
+aux_source_directory(./proto SRC_LIST)
+include_directories(./proto)
 
-target_link_libraries(protocol PUBLIC devcrypto TBB)
+add_library(protocol ${SRC_LIST} ${HEADERS})
+target_link_libraries(protocol PUBLIC devcrypto TBB PROTOBUF)

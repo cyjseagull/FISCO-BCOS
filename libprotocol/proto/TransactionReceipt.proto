@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package bcos.protocol;
+
+message TransactionReceiptPB
+{
+    message LogEntry
+    {
+        bytes address = 1;
+        bytes topics = 2;
+        bytes data = 3;
+    }
+    int32 version = 1;
+    bytes stateRoot = 2;
+    string gasUsed = 3;
+    bytes contractAddress = 4;
+    bytes bloom = 5;
+    int32 status = 6;
+    bytes outputBytes = 7;
+    LogEntry logEntries = 8;
+}
