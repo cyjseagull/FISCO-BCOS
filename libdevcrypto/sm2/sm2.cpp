@@ -179,6 +179,10 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     lresult = true;
     // LOG(DEBUG)<<"r:"<<r<<" rLen:"<<r.length()<<" s:"<<s<<" sLen:"<<s.length();
 err:
+    if (res)
+    {
+        BN_free(res);
+    }
     if (ctx)
         BN_CTX_free(ctx);
     if (sm2Key)
@@ -253,13 +257,13 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
 
     /*Now Verify it*/
     signData = ECDSA_SIG_new();
-    signData->r = BN_bin2bn(_signData, 32, NULL);
+    BN_bin2bn(_signData, 32, signData->r);
     if (!signData->r)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_bin2bn r" << LOG_KV("pubKey", pubHex);
         goto err;
     }
-    signData->s = BN_bin2bn(_signData + 32, 32, NULL);
+    BN_bin2bn(_signData + 32, 32, signData->s);
     if (!signData->s)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_bin2bn s" << LOG_KV("pubKey", pubHex);
@@ -349,6 +353,10 @@ string SM2::priToPub(const string& pri)
     // LOG(DEBUG) << LOG_KV("pri:", pri) << LOG_KV(" pri size:", pri.size())
     //            << LOG_KV("PriToPub:", pubKey) << LOG_KV("PriToPubLen:", pubKey.length());
 err:
+    if (res)
+    {
+        BN_free(res);
+    }
     if (pub)
         OPENSSL_free(pub);
     if (ctx)
