@@ -20,9 +20,9 @@
  */
 
 #include "SM4Crypto.h"
+#include "internal/sm4.h"
 #include "libdevcrypto/Exceptions.h"
-#include "sm4/sm4.h"
-#include <openssl/sm4.h>
+#include "openssl/modes.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,7 +31,7 @@ using namespace dev::crypto;
 using namespace std;
 
 string dev::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+    const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
     int padding = _plainDataSize % 16;
     int nSize = 16 - padding;
@@ -42,21 +42,29 @@ string dev::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDat
 
     string enData;
     enData.resize(inDataVLen);
-    SM4::getInstance().setKey(_key, _keySize);
-    SM4::getInstance().cbcEncrypt(
-        inDataV.data(), (unsigned char*)enData.data(), inDataVLen, (unsigned char*)_ivData, 1);
+    SM4_KEY sm4Key;
+    unsigned char* iv = (unsigned char*)malloc(16);
+    std::memcpy(iv, _ivData, 16);
+    SM4_set_key((const byte*)_key, &sm4Key);
+    CRYPTO_cbc128_encrypt((const byte*)inDataV.data(), (byte*)enData.data(), inDataVLen,
+        (const void*)&sm4Key, iv, (block128_f)SM4_encrypt);
+    free(iv);
     return enData;
 }
 
 string dev::crypto::sm4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+    const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
     string deData;
     deData.resize(_cypherDataSize);
-    SM4::getInstance().setKey(_key, _keySize);
-    SM4::getInstance().cbcEncrypt(
-        _cypherData, (unsigned char*)deData.data(), _cypherDataSize, (unsigned char*)_ivData, 0);
+    SM4_KEY sm4Key;
+    SM4_set_key(_key, &sm4Key);
+    unsigned char* iv = (unsigned char*)malloc(16);
+    std::memcpy(iv, _ivData, 16);
+    CRYPTO_cbc128_decrypt(_cypherData, (unsigned char*)deData.data(), _cypherDataSize,
+        (const void*)&sm4Key, iv, (block128_f)SM4_decrypt);
     int padding = deData.at(_cypherDataSize - 1);
     int deLen = _cypherDataSize - padding;
+    free(iv);
     return deData.substr(0, deLen);
 }
