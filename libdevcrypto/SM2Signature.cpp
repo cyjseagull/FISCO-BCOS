@@ -108,7 +108,7 @@ bool dev::sm2Verify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 
     }
     auto signData = _s->asBytes();
     bool lresult = SM2::getInstance().verify(
-        signData.data(), signData.size(), _hash.data(), h256::size, _p.data());
+        signData.data(), signData.size(), _hash.data(), h256::size, (const char*)_p.data());
     return lresult;
 }
 

@@ -481,7 +481,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
     // encrypt certificate should set after connect certificate
-    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+    // sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
     if (SSL_CTX_use_enc_PrivateKey_file(
             sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
     {
