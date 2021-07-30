@@ -1266,8 +1266,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
-        Transaction::Ptr tx = std::make_shared<Transaction>(
-            jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        Transaction::Ptr tx =
+            std::make_shared<Transaction>(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::None);
         // receive transaction from channel or rpc
         tx->setRpcTx(true);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
@@ -1297,7 +1297,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 });
         }
         // calculate the keccak256 before submit into the transaction pool
-        tx->hash();
+        // tx->hash();
         std::pair<h256, Address> ret;
         switch (clientProtocolversion)
         {

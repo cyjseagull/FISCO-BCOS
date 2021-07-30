@@ -43,6 +43,7 @@ include(Dependencies)
 
 # install dependencies
 include(ProjectTBB)
+include(ProjectRapidSV)
 include(ProjectSnappy)
 include(ProjectLevelDB)
 include(ProjectRocksDB)

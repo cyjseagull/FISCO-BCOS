@@ -43,6 +43,7 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libtxpool/TransactionVerifierInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -142,6 +143,11 @@ public:
     {
         m_msgEngine->setNodeTimeMaintenance(_nodeTimeMaintenance);
         m_nodeTimeMaintenance = _nodeTimeMaintenance;
+    }
+
+    void setTxVerifier(dev::txpool::TransactionVerifierInterface::Ptr _verifier)
+    {
+        m_txQueue->setTxVerifier(_verifier);
     }
 
     NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }

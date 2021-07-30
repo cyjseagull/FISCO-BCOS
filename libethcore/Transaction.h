@@ -339,6 +339,9 @@ public:
 
     std::shared_ptr<crypto::Signature> vrs() { return m_vrs; }
 
+    void setInvalid(bool _invalid) { m_invalid = _invalid; }
+    bool invalid() const { return m_invalid; }
+
 protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
 
@@ -392,11 +395,12 @@ protected:
     mutable dev::SharedMutex x_nodeListWithTheTransaction;
     // Record the node where the transaction exists
     std::set<dev::h512> m_nodeListWithTheTransaction;
+    bool m_invalid = false;
 };
 
 /// Nice name for vector of Transaction.
 using Transactions = std::vector<Transaction::Ptr>;
-
+using TransactionsPtr = std::shared_ptr<std::vector<Transaction::Ptr>>;
 /// Simple human-readable stream-shift operator.
 inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 {

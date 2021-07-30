@@ -113,7 +113,7 @@ public:
     FakeTxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         uint64_t const& _limit = 102400, int32_t const& _protocolId = dev::eth::ProtocolID::TxPool)
-      : TxPool(_p2pService, _blockChain, _protocolId, _limit)
+      : TxPool(_p2pService, _blockChain, _protocolId, nullptr, _limit)
     {}
     std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
     {

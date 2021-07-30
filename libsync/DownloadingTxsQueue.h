@@ -29,6 +29,7 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>
+#include <libtxpool/TransactionVerifierInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -90,6 +91,11 @@ public:
         m_needImportToTxPool = _needImportToTxPool;
     }
 
+    void setTxVerifier(dev::txpool::TransactionVerifierInterface::Ptr _verifier)
+    {
+        m_verifier = _verifier;
+    }
+
 private:
     NodeID m_nodeId;
     std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> m_buffer;
@@ -99,6 +105,8 @@ private:
     SyncMasterStatus::Ptr m_syncStatus;
     dev::p2p::P2PInterface::Ptr m_service;
     std::atomic_bool m_needImportToTxPool = {true};
+
+    dev::txpool::TransactionVerifierInterface::Ptr m_verifier;
 };
 
 }  // namespace sync

@@ -24,8 +24,10 @@
 #pragma once
 #include "TransactionNonceCheck.h"
 #include "TxPoolInterface.h"
+#include "libtxpool/TransactionVerifierInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/ThreadPool.h>
+#include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -61,14 +63,16 @@ struct transactionCompare
         return _first->importTime() <= _second->importTime();
     }
 };
-class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPool>
+class TxPool : public TxPoolInterface, public Worker, public std::enable_shared_from_this<TxPool>
 {
 public:
     TxPool() = default;
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 2)
-      : m_service(_p2pService),
+        PROTOCOL_ID const& _protocolId, TransactionVerifierInterface::Ptr _verifier = nullptr,
+        uint64_t const& _limit = 102400, uint64_t workThreads = 2)
+      : Worker("txpool", 0),
+        m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
         m_protocolId(_protocolId)
@@ -84,20 +88,26 @@ public:
             std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(m_groupId), workThreads);
         m_invalidTxs = std::make_shared<std::map<dev::h256, dev::u256>>();
         m_txsHashFilter = std::make_shared<std::set<h256>>();
-    }
-    void start() override {}
-    void stop() override
-    {
-        if (m_submitPool)
+        m_verifier = _verifier;
+        m_verifierQueue = std::make_shared<dev::eth::Transactions>();
+        if (!m_verifier)
         {
-            m_submitPool->stop();
+            return;
         }
-        if (m_workerPool)
-        {
-            m_workerPool->stop();
-        }
-        TXPOOL_LOG(DEBUG) << LOG_DESC("TxPool Stopped!");
+        m_verifier->registerChecker(
+            [this](dev::h256 const& _txHash) { return this->txExists(_txHash); });
+        m_verifier->registerVerifierAndSubmitHandler(
+            [this](dev::eth::Transaction::Ptr _tx) { this->verifyAndSubmitTransaction(_tx); });
+        m_verifier->registerReceiptNotifier(
+            [this](dev::eth::Transaction::Ptr _tx, dev::eth::ImportResult const& _result) {
+                this->notifyReceipt(_tx, _result);
+            });
     }
+    void start() override;
+    void stop() override;
+
+    void doWork() override;
+
     void setMaxBlockLimit(unsigned const& _limit)
     {
         m_maxBlockLimit = _limit;
@@ -177,6 +187,8 @@ public:
     void freshTxsStatus() override;
 
 protected:
+    virtual std::pair<h256, Address> submitWithThreadPool(dev::eth::Transaction::Ptr _tx);
+    virtual void verifyAndSubmitTransaction(dev::eth::Transaction::Ptr _tx);
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
      * synchronously.
@@ -194,6 +206,8 @@ protected:
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     void removeInvalidTxs();
     void dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block);
+
+    virtual void batchVerifyTxs();
 
 private:
     void startSubmitThread();
@@ -219,7 +233,7 @@ private:
         return true;
     }
 
-    void notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet);
+    void notifyReceipt(dev::eth::Transaction::Ptr _tx, dev::eth::ImportResult const& _verifyRet);
 
     bool isSealerOrObserver();
     void registerSyncStatusChecker(std::function<bool()> _handler) override
@@ -227,6 +241,8 @@ private:
         m_syncStatusChecker = _handler;
     }
     void setTransactionKnownBy(std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer);
+
+    virtual size_t verifyQueueSize();
 
 private:
     /// p2p module
@@ -264,6 +280,14 @@ private:
     int64_t m_maxMemoryLimit = 512 * 1024 * 1024;
 
     unsigned m_maxBlockLimit;
+
+    TransactionVerifierInterface::Ptr m_verifier;
+
+    dev::eth::TransactionsPtr m_verifierQueue;
+    mutable SharedMutex x_verifierQueue;
+
+    boost::condition_variable m_txFetcherSignal;
+    boost::mutex x_txFetcherSignal;
 };
 }  // namespace txpool
 }  // namespace dev

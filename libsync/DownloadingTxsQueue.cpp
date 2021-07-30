@@ -131,27 +131,8 @@ void DownloadingTxsQueue::pop2TxPool(
             }
             decode_time_cost += (utcTime() - record_time);
             record_time = utcTime();
-
-            // parallel verify transaction before import
-            tbb::parallel_for(tbb::blocked_range<size_t>(0, txs->size()),
-                [&](const tbb::blocked_range<size_t>& _r) {
-                    for (size_t j = _r.begin(); j != _r.end(); ++j)
-                    {
-                        try
-                        {
-                            if (!_txPool->txExists((*txs)[j]->hash()))
-                            {
-                                (*txs)[j]->sender();
-                            }
-                        }
-                        catch (std::exception const& _e)
-                        {
-                            SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
-                                              << LOG_KV("reason", boost::diagnostic_information(_e))
-                                              << LOG_KV("hash", (*txs)[j]->hash());
-                        }
-                    }
-                });
+            // batchVerifyTxs
+            m_verifier->batchVerifyTxs(txs);
             verifySig_time_cost += (utcTime() - record_time);
 
             // import into tx pool
@@ -159,42 +140,9 @@ void DownloadingTxsQueue::pop2TxPool(
             NodeID fromPeer = txsShard->fromPeer;
             for (auto tx : *txs)
             {
-                try
-                {
-                    auto importResult = _txPool->import(tx);
-                    if (dev::eth::ImportResult::Success == importResult)
-                    {
-                        tx->appendNodeContainsTransaction(fromPeer);
-                        tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
-                        successCnt++;
-                    }
-                    else if (dev::eth::ImportResult::AlreadyKnown == importResult)
-                    {
-                        SYNC_LOG(TRACE)
-                            << LOG_BADGE("Tx")
-                            << LOG_DESC("Import peer transaction into txPool DUPLICATED from peer")
-                            << LOG_KV("reason", int(importResult))
-                            << LOG_KV("peer", fromPeer.abridged())
-                            << LOG_KV("txHash", tx->hash().abridged());
-                    }
-                    else
-                    {
-                        SYNC_LOG(TRACE)
-                            << LOG_BADGE("Tx")
-                            << LOG_DESC("Import peer transaction into txPool FAILED from peer")
-                            << LOG_KV("reason", int(importResult))
-                            << LOG_KV("peer", fromPeer.abridged())
-                            << LOG_KV("txHash", tx->hash().abridged());
-                    }
-                }
-                catch (std::exception& e)
-                {
-                    SYNC_LOG(WARNING)
-                        << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP received")
-                        << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("reason", e.what())
-                        << LOG_KV("rlp", toHex(tx->rlp()));
-                    continue;
-                }
+                tx->appendNodeContainsTransaction(fromPeer);
+                tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
+                successCnt++;
             }
             import_time_cost += (utcTime() - record_time);
         }

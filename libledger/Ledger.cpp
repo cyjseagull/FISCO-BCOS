@@ -36,6 +36,7 @@
 #include <libnetwork/PeerWhitelist.h>
 #include <libsync/SyncMaster.h>
 #include <libsync/SyncMsgPacketFactory.h>
+#include <libtxpool/TransactionVerifier.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -229,8 +230,18 @@ bool Ledger::initTxPool()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
         return false;
     }
+    // init TransactionVerifier
+    m_txVerifier = std::make_shared<dev::txpool::TransactionVerifier>();
+    if (m_param->mutableTxPoolParam().txVerifierType == BATCH_TX_VERIFIER)
+    {
+        Ledger_LOG(INFO) << LOG_DESC("initTxPool: batch verify transactions");
+        m_txVerifier->setBatchVerify(true);
+    }
+    // TODO: batch verify transactions with GPU
     auto txPool = std::make_shared<dev::txpool::TxPool>(m_service, m_blockChain, protocol_id,
-        m_param->mutableTxPoolParam().txPoolLimit, m_param->mutableTxPoolParam().notifyWorkerNum);
+        m_txVerifier, m_param->mutableTxPoolParam().txPoolLimit,
+        m_param->mutableTxPoolParam().notifyWorkerNum);
+
     txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
     txPool->setMaxMemoryLimit(m_param->mutableTxPoolParam().maxTxPoolMemorySize);
     m_txPool = txPool;
@@ -559,6 +570,8 @@ bool Ledger::initSync()
         m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
         m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
+
+    syncMaster->setTxVerifier(m_txVerifier);
 
     // create and setSyncMsgPacketFactory
     SyncMsgPacketFactory::Ptr syncMsgPacketFactory;

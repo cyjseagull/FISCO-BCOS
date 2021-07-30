@@ -36,44 +36,137 @@ namespace dev
 {
 namespace txpool
 {
-// import transaction to the txPool
 std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 {
-    m_submitPool->enqueue([this, _tx]() {
-        try
+    if (!m_verifier->batchVerify())
+    {
+        return submitWithThreadPool(_tx);
+    }
+    // batch verifier
+    WriteGuard l(x_verifierQueue);
+    m_verifierQueue->push_back(_tx);
+    m_txFetcherSignal.notify_all();
+    return std::make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
+}
+
+void TxPool::start()
+{
+    if (m_running)
+    {
+        TXPOOL_LOG(WARNING) << "[TxPool module has already been started]";
+        return;
+    }
+    TXPOOL_LOG(INFO) << "[Start txpool module]";
+    /// start  a thread to execute doWork()&&workLoop()
+    startWorking();
+    m_running = true;
+}
+
+/// stop the Sealer module
+void TxPool::stop()
+{
+    if (m_running == false)
+    {
+        return;
+    }
+    TXPOOL_LOG(INFO) << "Stop txpool module...";
+    m_running = false;
+    if (m_submitPool)
+    {
+        m_submitPool->stop();
+    }
+    if (m_workerPool)
+    {
+        m_workerPool->stop();
+    }
+    doneWorking();
+    if (isWorking())
+    {
+        stopWorking();
+        // will not restart worker, so terminate it
+        terminate();
+    }
+}
+
+void TxPool::doWork()
+{
+    if (m_running)
+    {
+        batchVerifyTxs();
+        if (verifyQueueSize() == 0)
         {
-            // RequestNotBelongToTheGroup: 10004
-            ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
-            if (isSealerOrObserver())
+            boost::unique_lock<boost::mutex> l(x_txFetcherSignal);
+            m_txFetcherSignal.wait_for(l, boost::chrono::milliseconds(10));
+        }
+    }
+}
+
+size_t TxPool::verifyQueueSize()
+{
+    ReadGuard l(x_verifierQueue);
+    return m_verifierQueue->size();
+}
+
+void TxPool::batchVerifyTxs()
+{
+    if (!m_verifier->batchVerify())
+    {
+        return;
+    }
+    auto txs = std::make_shared<dev::eth::Transactions>();
+    {
+        UpgradableGuard l(x_verifierQueue);
+        if (m_verifierQueue->size() == 0)
+        {
+            return;
+        }
+        UpgradeGuard ul(l);
+        txs->swap(*m_verifierQueue);
+    }
+    // batch verify the txs
+    m_verifier->batchVerifyTxs(txs);
+}
+
+// import transaction to the txPool
+std::pair<h256, Address> TxPool::submitWithThreadPool(Transaction::Ptr _tx)
+{
+    m_submitPool->enqueue([this, _tx]() { this->verifyAndSubmitTransaction(_tx); });
+    return std::make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
+}
+
+void TxPool::verifyAndSubmitTransaction(dev::eth::Transaction::Ptr _tx)
+{
+    try
+    {
+        // RequestNotBelongToTheGroup: 10004
+        ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
+        if (isSealerOrObserver())
+        {
+            // check sync status failed
+            if (m_syncStatusChecker && !m_syncStatusChecker())
             {
-                // check sync status failed
-                if (m_syncStatusChecker && !m_syncStatusChecker())
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
+                    << LOG_KV("groupId", m_groupId);
+                verifyRet = ImportResult::TransactionRefused;
+            }
+            // check sync status succ
+            else
+            {
+                verifyRet = import(_tx);
+                if (ImportResult::Success == verifyRet)
                 {
-                    TXPOOL_LOG(WARNING)
-                        << LOG_DESC("submitTransaction async failed for checkSyncStatus failed")
-                        << LOG_KV("groupId", m_groupId);
-                    verifyRet = ImportResult::TransactionRefused;
-                }
-                // check sync status succ
-                else
-                {
-                    verifyRet = import(_tx);
-                    if (ImportResult::Success == verifyRet)
-                    {
-                        return;
-                    }
+                    return;
                 }
             }
-            notifyReceipt(_tx, verifyRet);
         }
-        catch (std::exception const& e)
-        {
-            TXPOOL_LOG(WARNING) << LOG_DESC("submit tx failed")
-                                << LOG_KV("tx", _tx->hash().abridged())
-                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        }
-    });
-    return std::make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
+        notifyReceipt(_tx, verifyRet);
+    }
+    catch (std::exception const& e)
+    {
+        TXPOOL_LOG(WARNING) << LOG_DESC("submit tx failed") << LOG_KV("tx", _tx->hash().abridged())
+                            << LOG_KV("errorInfo", boost::diagnostic_information(e));
+    }
 }
 
 // create receipt

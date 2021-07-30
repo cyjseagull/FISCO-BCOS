@@ -35,6 +35,7 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <libstat/NetworkStatHandler.h>
+#include <libtxpool/TransactionVerifierInterface.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -257,6 +258,8 @@ protected:
     dev::eth::Handler<int64_t> m_handler;
 
     std::shared_ptr<dev::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
+
+    dev::txpool::TransactionVerifierInterface::Ptr m_txVerifier = nullptr;
 };
 }  // namespace ledger
 }  // namespace dev

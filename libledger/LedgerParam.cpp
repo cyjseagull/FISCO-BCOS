@@ -235,10 +235,13 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                                       "Please set tx_pool.notify_worker_num to positive !"));
         }
         mutableTxPoolParam().notifyWorkerNum = notifyWorkerNum;
+        mutableTxPoolParam().txVerifierType =
+            pt.get<std::string>("tx_pool.tx_verify_type", SERIAL_TX_VERIFIER);
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
                               << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
                               << LOG_KV("memorySizeLimit(MB)", memorySizeLimit)
-                              << LOG_KV("notifyWorkerNum", notifyWorkerNum);
+                              << LOG_KV("notifyWorkerNum", notifyWorkerNum)
+                              << LOG_KV("txVerifierType", mutableTxPoolParam().txVerifierType);
     }
     catch (std::exception& e)
     {
