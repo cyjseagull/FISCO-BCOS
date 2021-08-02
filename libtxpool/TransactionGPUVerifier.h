@@ -42,8 +42,8 @@ private:
     void binToWords(uint32_t* _dst, size_t _distSize, byte const* _data, size_t _size);
     void calculateHash(dev::eth::TransactionsPtr _txs);
     std::vector<gsv_verify_t> generateSignatureList(dev::eth::TransactionsPtr _txs);
-    bool generatePublicKey(
-        gsv_verify_t& _signature, std::shared_ptr<dev::crypto::SM2Signature> _sm2Signature);
+    bool generatePublicKey(gsv_verify_t& _signature,
+        std::shared_ptr<dev::crypto::SM2Signature> _sm2Signature, h256 const& _originalData);
 };
 }  // namespace txpool
 }  // namespace dev
