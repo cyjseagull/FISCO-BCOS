@@ -36,6 +36,7 @@
 #include <libnetwork/PeerWhitelist.h>
 #include <libsync/SyncMaster.h>
 #include <libsync/SyncMsgPacketFactory.h>
+#include <libtxpool/TransactionGPUVerifier.h>
 #include <libtxpool/TransactionVerifier.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -235,6 +236,13 @@ bool Ledger::initTxPool()
     if (m_param->mutableTxPoolParam().txVerifierType == BATCH_TX_VERIFIER)
     {
         Ledger_LOG(INFO) << LOG_DESC("initTxPool: batch verify transactions");
+        m_txVerifier->setBatchVerify(true);
+    }
+    if (m_param->mutableTxPoolParam().txVerifierType == GPU_BATCH_TX_VERIFIER &&
+        g_BCOSConfig.SMCrypto())
+    {
+        Ledger_LOG(INFO) << LOG_DESC("initTxPool: batch verify transactions with GPU");
+        m_txVerifier = std::make_shared<dev::txpool::TransactionGPUVerifier>();
         m_txVerifier->setBatchVerify(true);
     }
     // TODO: batch verify transactions with GPU
