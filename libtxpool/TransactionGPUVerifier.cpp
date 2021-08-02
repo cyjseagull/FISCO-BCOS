@@ -78,10 +78,6 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
     size_t digestLen = sizeof(digest);
     const char* userId = "1234567812345678";
 
-    h256 hashBytes = h256("10D51CB90C0C0522E94875A2BEA7AB72299EBE7192E64EFE0573B1C77110E5C9");
-    h256 keyXBytes = h256("D5548C7825CBB56150A3506CD57464AF8A1AE0519DFAF3C58221DC810CAF28DD");
-    h256 keyYBytes = h256("921073768FE3D59CE54E79A49445CF73FED23086537027264D168946D479533E");
-
     auto pubHex = toHex(_sm2Signature->v.begin(), _sm2Signature->v.end(), "04");
     EC_GROUP* sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
     point = EC_POINT_new(sm2Group);
@@ -137,13 +133,7 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
     sm3_final(digest, &sm3Ctx);
     binToWords(_signature.e._limbs, sizeof(_signature.e._limbs) / sizeof(uint32_t), &(digest[0]),
         h256::size);
-
-    binToWords(_signature.key_x._limbs, sizeof(_signature.key_x._limbs) / sizeof(uint32_t),
-        keyXBytes.data(), h256::size);
-    binToWords(_signature.key_y._limbs, sizeof(_signature.key_y._limbs) / sizeof(uint32_t),
-        keyYBytes.data(), h256::size);
-    binToWords(_signature.e._limbs, sizeof(_signature.e._limbs) / sizeof(uint32_t),
-        hashBytes.data(), h256::size);
+    LOG(INFO) << LOG_DESC("e: ") << toHex(&(digest[0]), &(digest[0]) + 32, "");
     success = true;
 done:
     if (point)
@@ -166,14 +156,12 @@ std::vector<gsv_verify_t> TransactionGPUVerifier::generateSignatureList(
     {
         auto sm2Signature = std::dynamic_pointer_cast<SM2Signature>(tx->signature());
         gsv_verify_t signature;
-        h256 rBytes = h256("23B20B796AAAFEAAA3F1592CB9B4A93D5A8D279843E1C57980E64E0ABC5F5B05");
-        h256 sBytes = h256("E11F5909F947D5BE08C84A22CE9F7C338F7CF4A5B941B9268025495D7D433071");
-        binToWords(signature.r._limbs, sizeof(signature.r._limbs) / sizeof(uint32_t), rBytes.data(),
-            h256::size);
-        binToWords(signature.s._limbs, sizeof(signature.s._limbs) / sizeof(uint32_t), sBytes.data(),
-            h256::size);
-
-
+        binToWords(signature.r._limbs, sizeof(signature.r._limbs) / sizeof(uint32_t),
+            sm2Signature->r.data(), h256::size);
+        binToWords(signature.s._limbs, sizeof(signature.s._limbs) / sizeof(uint32_t),
+            sm2Signature->s.data(), h256::size);
+        LOG(INFO) << LOG_DESC("r: ") << toHex(sm2Signature->r.begin(), sm2Signature->r.end(), "");
+        LOG(INFO) << LOG_DESC("s: ") << toHex(sm2Signature->s.begin(), sm2Signature->s.end(), "");
         generatePublicKey(signature, sm2Signature, tx->hash());
         signatureList.emplace_back(signature);
     }
