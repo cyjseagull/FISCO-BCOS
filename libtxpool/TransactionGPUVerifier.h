@@ -39,7 +39,9 @@ protected:
     void verifyTxs(dev::eth::TransactionsPtr _txs) override;
 
 private:
+    int char2int(char c);
     void binToWords(uint32_t* _dst, size_t _distSize, byte const* _data, size_t _size);
+    void hex2bn(uint32_t* _dst, size_t _dstSize, const char* _hexString);
     void calculateHash(dev::eth::TransactionsPtr _txs);
     std::vector<gsv_verify_t> generateSignatureList(dev::eth::TransactionsPtr _txs);
     bool generatePublicKey(gsv_verify_t& _signature,
