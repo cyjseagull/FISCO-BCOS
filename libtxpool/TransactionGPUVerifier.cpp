@@ -41,7 +41,7 @@ void TransactionGPUVerifier::verifyTxs(dev::eth::TransactionsPtr _txs)
     std::vector<int> results;
     results.resize(_txs->size());
     memset(&(results[0]), 1, _txs->size());
-    GSV_verify_exec(_txs->size(), &(signatureList[0]), &(results[0]));
+    GSV_verify_exec(2, _txs->size(), &(signatureList[0]), &(results[0]));
     size_t index = 0;
     for (auto tx : *_txs)
     {
@@ -77,10 +77,6 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
     unsigned char digest[h256::size];
     size_t digestLen = sizeof(digest);
     const char* userId = "1234567812345678";
-
-    std::string hash = "10D51CB90C0C0522E94875A2BEA7AB72299EBE7192E64EFE0573B1C77110E5C9";
-    std::string keyX = "D5548C7825CBB56150A3506CD57464AF8A1AE0519DFAF3C58221DC810CAF28DD";
-    std::string keyY = "921073768FE3D59CE54E79A49445CF73FED23086537027264D168946D479533E";
 
     h256 hashBytes = h256("10D51CB90C0C0522E94875A2BEA7AB72299EBE7192E64EFE0573B1C77110E5C9");
     h256 keyXBytes = h256("D5548C7825CBB56150A3506CD57464AF8A1AE0519DFAF3C58221DC810CAF28DD");
@@ -148,11 +144,6 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
         keyYBytes.data(), h256::size);
     binToWords(_signature.e._limbs, sizeof(_signature.e._limbs) / sizeof(uint32_t),
         hashBytes.data(), h256::size);
-
-    hex2bn(_signature.key_x._limbs, (size_t)8, keyX.c_str());
-    hex2bn(_signature.key_y._limbs, (size_t)8, keyY.c_str());
-
-    hex2bn(_signature.e._limbs, (size_t)8, hash.c_str());
     success = true;
 done:
     if (point)
@@ -175,9 +166,6 @@ std::vector<gsv_verify_t> TransactionGPUVerifier::generateSignatureList(
     {
         auto sm2Signature = std::dynamic_pointer_cast<SM2Signature>(tx->signature());
         gsv_verify_t signature;
-        std::string rHex = "23B20B796AAAFEAAA3F1592CB9B4A93D5A8D279843E1C57980E64E0ABC5F5B05";
-        std::string sHex = "E11F5909F947D5BE08C84A22CE9F7C338F7CF4A5B941B9268025495D7D433071";
-
         h256 rBytes = h256("23B20B796AAAFEAAA3F1592CB9B4A93D5A8D279843E1C57980E64E0ABC5F5B05");
         h256 sBytes = h256("E11F5909F947D5BE08C84A22CE9F7C338F7CF4A5B941B9268025495D7D433071");
         binToWords(signature.r._limbs, sizeof(signature.r._limbs) / sizeof(uint32_t), rBytes.data(),
@@ -185,8 +173,6 @@ std::vector<gsv_verify_t> TransactionGPUVerifier::generateSignatureList(
         binToWords(signature.s._limbs, sizeof(signature.s._limbs) / sizeof(uint32_t), sBytes.data(),
             h256::size);
 
-        hex2bn(signature.r._limbs, (size_t)8, rHex.c_str());
-        hex2bn(signature.s._limbs, (size_t)8, sHex.c_str());
 
         generatePublicKey(signature, sm2Signature, tx->hash());
         signatureList.emplace_back(signature);

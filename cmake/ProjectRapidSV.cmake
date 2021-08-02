@@ -5,8 +5,8 @@ ExternalProject_Add(rapid-sv
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME RapidSV.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/cyjseagull/RapidSV/archive/ffe234ddb4fe7264ac7b6baa94fabba18683f008.tar.gz
-    URL_HASH SHA256=9461b26e708918e5e77dc0107f01fdddae44a46104afa3760daa1d916e1ab146
+    URL https://github.com/cyjseagull/RapidSV/archive/55fc816bdcd31925b93adc2fe252204c5896d96d.tar.gz
+    URL_HASH SHA256=73b3d0bb63760cd46b55e8141b3ed56449c299b09a593b06a03833442856d4eb
     INSTALL_COMMAND ""
     LOG_CONFIGURE 1
     LOG_BUILD 1

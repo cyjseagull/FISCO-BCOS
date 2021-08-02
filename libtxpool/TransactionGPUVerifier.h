@@ -32,8 +32,8 @@ namespace txpool
 class TransactionGPUVerifier : public TransactionVerifier
 {
 public:
-    TransactionGPUVerifier() { GSV_verify_init(); }
-    ~TransactionGPUVerifier() { GSV_verify_close(); }
+    TransactionGPUVerifier() { GSV_verify_init(2); }
+    ~TransactionGPUVerifier() { GSV_verify_close(2); }
 
 protected:
     void verifyTxs(dev::eth::TransactionsPtr _txs) override;
