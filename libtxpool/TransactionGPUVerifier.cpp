@@ -95,14 +95,8 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
     unsigned char pubY[32];
     BN_bn2bin(point->X, &(pubX[0]));
     BN_bn2bin(point->Y, &(pubY[0]));
-    binToWords(_signature.key_x._limbs, sizeof(_signature.key_x._limbs) / sizeof(uint32_t),
-        (byte const*)(&pubX[0]), 32);
-    binToWords(_signature.key_y._limbs, sizeof(_signature.key_y._limbs) / sizeof(uint32_t),
-        (byte const*)(&pubY[0]), 32);
-
-    LOG(INFO) << LOG_DESC("key_y: ") << toHex(&(pubY[0]), &(pubY[0]) + 32, "");
-    LOG(INFO) << LOG_DESC("key_x: ") << toHex(&(pubX[0]), &(pubX[0]) + 32, "");
-
+    binToWords(_signature.key_x._limbs, (size_t)(8), (byte const*)(&pubX[0]), 32);
+    binToWords(_signature.key_y._limbs, (size_t)(8), (byte const*)(&pubY[0]), 32);
     sm2Key = EC_KEY_new();
     if (sm2Key == NULL)
     {
@@ -131,9 +125,8 @@ bool TransactionGPUVerifier::generatePublicKey(gsv_verify_t& _signature,
     sm3_update(&sm3Ctx, digest, digestLen);
     sm3_update(&sm3Ctx, _originalData.data(), h256::size);
     sm3_final(digest, &sm3Ctx);
-    binToWords(_signature.e._limbs, sizeof(_signature.e._limbs) / sizeof(uint32_t), &(digest[0]),
-        h256::size);
-    LOG(INFO) << LOG_DESC("e: ") << toHex(&(digest[0]), &(digest[0]) + 32, "");
+
+    binToWords(_signature.e._limbs, (size_t)8, &(digest[0]), h256::size);
     success = true;
 done:
     if (point)
@@ -156,12 +149,8 @@ std::vector<gsv_verify_t> TransactionGPUVerifier::generateSignatureList(
     {
         auto sm2Signature = std::dynamic_pointer_cast<SM2Signature>(tx->signature());
         gsv_verify_t signature;
-        binToWords(signature.r._limbs, sizeof(signature.r._limbs) / sizeof(uint32_t),
-            sm2Signature->r.data(), h256::size);
-        binToWords(signature.s._limbs, sizeof(signature.s._limbs) / sizeof(uint32_t),
-            sm2Signature->s.data(), h256::size);
-        LOG(INFO) << LOG_DESC("r: ") << toHex(sm2Signature->r.begin(), sm2Signature->r.end(), "");
-        LOG(INFO) << LOG_DESC("s: ") << toHex(sm2Signature->s.begin(), sm2Signature->s.end(), "");
+        binToWords(signature.r._limbs, (size_t)(8), sm2Signature->r.data(), h256::size);
+        binToWords(signature.s._limbs, (size_t)(8), sm2Signature->s.data(), h256::size);
         generatePublicKey(signature, sm2Signature, tx->hash());
         signatureList.emplace_back(signature);
     }
@@ -197,10 +186,6 @@ void TransactionGPUVerifier::hex2bn(uint32_t* _dst, size_t _dstSize, const char*
         int value = char2int(_hexString[length - i - 1]);
         _dst[i / 8] += value << i % 8 * 4;
     }
-    for (size_t i = 0; i < _dstSize; i++)
-    {
-        LOG(INFO) << LOG_DESC("### hex2bn ") << i << LOG_DESC(": ") << _dst[i];
-    }
 }
 
 void TransactionGPUVerifier::binToWords(
@@ -215,9 +200,5 @@ void TransactionGPUVerifier::binToWords(
     {
         auto value = (int)_data[_size - i - 1];
         _dst[i / 4] += value << ((i % 4) * 8);
-    }
-    for (size_t i = 0; i < _dstSize; i++)
-    {
-        LOG(INFO) << LOG_DESC("### binToWords ") << i << LOG_DESC(": ") << _dst[i];
     }
 }
