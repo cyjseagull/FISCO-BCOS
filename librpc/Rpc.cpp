@@ -1266,8 +1266,23 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
+
+        auto startT = utcTime();
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+        m_totalCost.store(m_totalCost.load() + (utcTime() - startT));
+        m_totalTxsSize.store(m_totalTxsSize.load() + 1);
+
+        if (m_totalTxsSize % 5000 == 0)
+        {
+            RPC_LOG(INFO) << LOG_DESC("cons verify transaction:")
+                          << LOG_KV("m_totalCost", m_totalCost)
+                          << LOG_KV("m_totalTxsSize", m_totalTxsSize)
+                          << LOG_KV("perTx", (m_totalTxsSize > 0) ? ((double)(m_totalCost) /
+                                                                        (double)(m_totalTxsSize)) :
+                                                                    0);
+        }
+
         // receive transaction from channel or rpc
         tx->setRpcTx(true);
         auto currentTransactionCallback = m_currentTransactionCallback.get();

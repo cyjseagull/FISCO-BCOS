@@ -752,6 +752,9 @@ protected:
     // Make object destructive overhead asynchronous
     dev::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
+
+    std::atomic<int64_t> m_totalCost = {0};
+    std::atomic<int64_t> m_totalTxsSize = {0};
 };
 }  // namespace consensus
 }  // namespace dev

@@ -40,6 +40,7 @@ using namespace dev::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
+    auto startT = utcTime();
     // return nullptr prepare to exit when g_BCOSConfig.shouldExit is true
     if (g_BCOSConfig.shouldExit)
     {
@@ -73,6 +74,14 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
         return nullptr;
     }
     m_executingNumber = block.blockHeader().number();
+    m_totalCost.store(m_totalCost.load() + (utcTime() - startT));
+    m_totalTxsSize.store(m_totalTxsSize.load() + (block.transactions()->size()));
+    BLOCKVERIFIER_LOG(INFO) << LOG_DESC("cons execute block:") << LOG_KV("m_totalCost", m_totalCost)
+                            << LOG_KV("m_totalTxsSize", m_totalTxsSize)
+                            << LOG_KV(
+                                   "perTx", (m_totalTxsSize > 0) ?
+                                                ((double)(m_totalCost) / (double)(m_totalTxsSize)) :
+                                                0);
     return context;
 }
 

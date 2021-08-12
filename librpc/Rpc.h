@@ -258,6 +258,9 @@ private:
 
     void getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
         std::string const& _from, std::string const& _size, bool _compress);
+
+    std::atomic<int64_t> m_totalCost = {0};
+    std::atomic<int64_t> m_totalTxsSize = {0};
 };
 
 }  // namespace rpc

@@ -103,6 +103,8 @@ private:
     std::atomic<int64_t> m_executingNumber = {0};
 
     VMFlagType m_evmFlags = 0;
+    std::atomic<int64_t> m_totalCost = {0};
+    std::atomic<int64_t> m_totalTxsSize = {0};
 };
 
 }  // namespace blockverifier

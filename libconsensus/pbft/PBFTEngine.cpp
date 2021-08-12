@@ -1251,6 +1251,7 @@ void PBFTEngine::checkAndSave()
             std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
             auto genSig_time_cost = utcTime() - record_time;
+            auto recordT = utcTime();
             record_time = utcTime();
             /// callback block chain to commit block
             CommitResult ret = m_blockChain->commitBlock(p_block,
@@ -1292,6 +1293,15 @@ void PBFTEngine::checkAndSave()
                 m_blockSync->noteSealingBlockNumber(m_blockChain->number());
                 m_txPool->handleBadBlock(*p_block);
             }
+            m_totalCost.store(m_totalCost.load() + (utcTime() - recordT));
+            m_totalTxsSize.store(m_totalTxsSize.load() + (p_block->transactions()->size()));
+            PBFTENGINE_LOG(INFO) << LOG_DESC("cons commit block:")
+                                 << LOG_KV("m_totalCost", m_totalCost)
+                                 << LOG_KV("m_totalTxsSize", m_totalTxsSize)
+                                 << LOG_KV("perTx",
+                                        (m_totalTxsSize > 0) ?
+                                            ((double)(m_totalCost) / (double)(m_totalTxsSize)) :
+                                            0);
         }
         else
         {
