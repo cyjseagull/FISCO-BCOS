@@ -431,9 +431,13 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
             ++i;
         }
-
+        auto blockHash = m_block->blockHeader()->hash();
+        auto blockNumber = m_block->blockHeader()->number();
+        SCHEDULER_LOG(DEBUG) << LOG_DESC("DAGExecute") << LOG_KV("txs", totalCount)
+                             << LOG_KV("hash", blockHash.abridged()) << LOG_KV("num", blockNumber);
+        auto startT = utcTime();
         executor->dagExecuteTransactions(*messages,
-            [messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
+            [startT, messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
                 bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
                 if (error)
@@ -470,6 +474,9 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
                     (*callbackPtr)(nullptr);
                 }
+                SCHEDULER_LOG(INFO)
+                    << LOG_DESC("DAGExecute success") << LOG_KV("timecost", utcTime() - startT)
+                    << LOG_KV("hash", blockHash.abridged()) << LOG_KV("num", blockNumber);
             });
     }
 }

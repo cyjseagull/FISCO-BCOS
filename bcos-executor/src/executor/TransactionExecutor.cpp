@@ -936,7 +936,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto executive =
             createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
 
-        EXECUTOR_LOG(DEBUG) << LOG_BADGE("executeTransactionsWithCriticals")
+        EXECUTOR_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                             << LOG_DESC("Start transaction") << LOG_KV("to", input->receiveAddress)
                             << LOG_KV("data", toHexStringWithPrefix(input->data));
         try
