@@ -353,7 +353,7 @@ void WasmTransactionExecutor::dagExecuteTransactionsInternal(
                 CriticalFields<bytes>::CriticalFieldPtr conflictFields = nullptr;
                 if (!cacheHandle.isValid())
                 {
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                    EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                         << LOG_DESC("No ABI found in cache, try to load")
                                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
 
@@ -362,7 +362,7 @@ void WasmTransactionExecutor::dagExecuteTransactionsInternal(
                     cacheHandle = m_abiCache->lookup(abiKey);
                     if (cacheHandle.isValid())
                     {
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                             << LOG_DESC("ABI had beed loaded by other workers")
                                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                         auto& functionAbi = cacheHandle.value();
@@ -388,7 +388,7 @@ void WasmTransactionExecutor::dagExecuteTransactionsInternal(
                         auto entry = table->getRow(ACCOUNT_ABI);
                         auto abiStr = entry->getField(0);
 
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                             << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
 
                         auto functionAbi =
@@ -419,7 +419,7 @@ void WasmTransactionExecutor::dagExecuteTransactionsInternal(
                 }
                 else
                 {
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                    EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                         << LOG_DESC("Found ABI in cache")
                                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                     auto& functionAbi = cacheHandle.value();
