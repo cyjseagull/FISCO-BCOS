@@ -437,8 +437,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                              << LOG_KV("hash", blockHash.abridged()) << LOG_KV("num", blockNumber);
         auto startT = utcTime();
         executor->dagExecuteTransactions(*messages,
-            [startT, messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
-                bcos::Error::UniquePtr error,
+            [startT, blockHash, blockNumber, messages, iterators = std::move(iterators), totalCount,
+                failed, callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
                 if (error)
                 {
