@@ -233,6 +233,7 @@ public:
     {
         // reset the timeout state to false
         m_timeoutState.store(false);
+        resetToView();
         freshTimer();
     }
 
