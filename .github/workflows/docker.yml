@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v3.*.*'
+    branches:
+      - 'v3.0.0-rc2'
 
 env:
   DOCKER_REPOSITORY: fiscobcos
