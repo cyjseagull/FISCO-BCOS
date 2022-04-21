@@ -122,9 +122,7 @@ void Session::send(std::shared_ptr<bytes> _msg)
 
     SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
-        Guard l(x_writeQueue);
-
-        m_writeQueue.push(make_pair(_msg, u256(utcTime())));
+        m_writeQueue.push(_msg);
     }
 
     write();
@@ -175,30 +173,25 @@ void Session::write()
 
     try
     {
-        Guard l(x_writeQueue);
-
         if (m_writing)
         {
             return;
         }
 
         m_writing = true;
-
-        std::pair<std::shared_ptr<bytes>, u256> task;
-        u256 enter_time = u256(0);
-
         if (m_writeQueue.empty())
         {
             m_writing = false;
             return;
         }
 
-        task = m_writeQueue.top();
-        m_writeQueue.pop();
-
-        enter_time = task.second;
+        std::shared_ptr<bytes> buffer;
+        auto ret = m_writeQueue.try_pop(buffer);
+        if (!ret)
+        {
+            return;
+        }
         auto session = shared_from_this();
-        auto buffer = task.first;
 
         auto server = m_server.lock();
         if (server && server->haveNetwork())

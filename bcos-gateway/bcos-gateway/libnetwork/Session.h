@@ -6,7 +6,10 @@
 
 #pragma once
 
+#include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Common.h>
+#include <tbb/concurrent_queue.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -14,9 +17,6 @@
 #include <mutex>
 #include <set>
 #include <utility>
-
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
 
 namespace bcos
 {
@@ -137,9 +137,11 @@ private:
         }
     };
 
-    boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
+    /*boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
-        m_writeQueue;
+        m_writeQueue;*/
+    tbb::concurrent_bounded_queue<std::shared_ptr<bytes>> m_writeQueue;
+
     std::atomic_bool m_writing = {false};
     bcos::Mutex x_writeQueue;
 
