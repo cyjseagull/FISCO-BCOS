@@ -167,6 +167,10 @@ public:
             asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
         }
     }
+    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesPointer _data) override
+    {
+        asyncSendBroadcastMessage(_type, _moduleID, ref(*_data));
+    }
 
     // useless for sync/pbft/txpool
     void onReceiveBroadcastMessage(

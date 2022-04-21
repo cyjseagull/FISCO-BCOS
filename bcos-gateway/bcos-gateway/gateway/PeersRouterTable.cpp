@@ -18,6 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
+#include <tbb/parallel_for.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -249,10 +250,14 @@ void PeersRouterTable::asyncBroadcastMsg(
     }
     auto selectT = utcTime() - startT;
     startT = utcTime();
-    for (auto const& peer : selectedPeers)
-    {
-        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, nullptr);
-    }
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, selectedPeers.size()),
+        [&](const tbb::blocked_range<size_t>& _r) {
+            for (size_t i = _r.begin(); i < _r.end(); i++)
+            {
+                auto const& peer = selectedPeers[i];
+                m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, nullptr);
+            }
+        });
     ROUTER_LOG(DEBUG) << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
                       << LOG_KV("size", selectedPeers.size()) << LOG_KV("selectT", selectT)
                       << LOG_KV("sendT", (utcTime() - startT));

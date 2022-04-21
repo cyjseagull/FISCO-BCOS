@@ -689,7 +689,7 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
         TxsSyncPacketType::TxsPacket, std::move(*encodedData));
     auto packetData = txsPacket->encode();
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, packetData);
     SYNC_LOG(DEBUG) << LOG_DESC("broadcastTxsFromRpc")
                     << LOG_KV("txsNum", block->transactionsSize())
                     << LOG_KV("messageSize(B)", packetData->size());
@@ -746,5 +746,5 @@ void TransactionSync::onEmptyTxs()
         m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
     auto packetData = txsStatus->encode();
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, packetData);
 }

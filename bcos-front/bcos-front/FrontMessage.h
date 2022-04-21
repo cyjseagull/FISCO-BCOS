@@ -74,7 +74,6 @@ public:
 
     virtual bytesConstRef payload() { return m_payload; }
     virtual void setPayload(bytesConstRef _payload) { m_payload = _payload; }
-
     virtual void setResponse() { m_ext |= ExtFlag::Response; }
     virtual bool isResponse() { return m_ext & ExtFlag::Response; }
 

@@ -278,6 +278,11 @@ public:
             nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
+    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bcos::bytesPointer _data) override
+    {
+        asyncSendBroadcastMessage(_type, _moduleID, bcos::ref(*_data));
+    }
+
 private:
     bcostars::FrontServicePrx m_proxy;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;

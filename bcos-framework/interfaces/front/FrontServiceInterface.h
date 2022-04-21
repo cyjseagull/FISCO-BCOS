@@ -130,6 +130,7 @@ public:
      * @return void
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) = 0;
+    virtual void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesPointer _data) = 0;
 };
 
 }  // namespace front

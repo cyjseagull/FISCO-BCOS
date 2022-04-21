@@ -774,7 +774,7 @@ void BlockSync::broadcastSyncStatus()
                        << LOG_KV("currentHash", statusMsg->hash().abridged());
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
-        ModuleID::BlockSync, ref(*encodedData));
+        ModuleID::BlockSync, encodedData);
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)

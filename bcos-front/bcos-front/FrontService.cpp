@@ -350,6 +350,13 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
         _type, m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
 }
 
+void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesPointer _data)
+{
+    m_threadPool->enqueue([this, _type, _moduleID, _data]() {
+        asyncSendBroadcastMessage(_type, _moduleID, ref(*_data));
+    });
+}
+
 /**
  * @brief: receive nodeIDs from gateway
  * @param _groupID: groupID
