@@ -430,7 +430,7 @@ void Gateway::onReceiveP2PMessage(
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    NetworkException const& _e, P2PSession::Ptr, std::shared_ptr<P2PMessage> _msg)
 {
     if (_e.errorCode() != 0)
     {

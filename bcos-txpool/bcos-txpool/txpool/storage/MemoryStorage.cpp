@@ -505,6 +505,7 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         }
     }
     notifyUnsealedTxsSize();
+    batchRemoveTxsQueue();
     auto removeT = utcTime() - startT;
     startT = utcTime();
     // update the ledger nonce
@@ -952,4 +953,27 @@ HashListPtr MemoryStorage::getAllTxsHash()
         txsHash->emplace_back(it.first);
     }
     return txsHash;
+}
+
+void MemoryStorage::batchRemoveTxsQueue()
+{
+    m_worker->enqueue([this]() {
+        Transaction::ConstPtr tx;
+        while (!m_txsQueue.empty())
+        {
+            auto ret = m_txsQueue.try_pop(tx);
+            if (!ret || !tx)
+            {
+                break;
+            }
+            if (!tx->sealed())
+            {
+                break;
+            }
+        }
+        if (tx && !tx->sealed())
+        {
+            m_txsQueue.push(tx);
+        }
+    });
 }

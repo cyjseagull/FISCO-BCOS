@@ -90,6 +90,8 @@ public:
 
     bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
 
+    void batchRemoveTxsQueue();
+
 protected:
     virtual bool shouldNotifyTx(bcos::protocol::Transaction::ConstPtr _tx,
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult)
