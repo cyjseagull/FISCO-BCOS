@@ -10,6 +10,7 @@
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Common.h>
 #include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_unordered_map.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -68,23 +69,27 @@ public:
 
     virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
     {
-        RecursiveGuard l(x_seq2Callback);
+        ReadGuard l(x_seq2Callback);
         m_seq2Callback->insert(std::make_pair(seq, callback));
     }
     virtual void removeSeqCallback(uint32_t seq)
     {
-        RecursiveGuard l(x_seq2Callback);
-        m_seq2Callback->erase(seq);
+        UpgradableGuard l(x_seq2Callback);
+        if (m_seq2Callback->count(seq))
+        {
+            UpgradeGuard ul(l);
+            m_seq2Callback->unsafe_erase(seq);
+        }
     }
     virtual void clearSeqCallback()
     {
-        RecursiveGuard l(x_seq2Callback);
+        WriteGuard l(x_seq2Callback);
         m_seq2Callback->clear();
     }
 
     ResponseCallback::Ptr getCallbackBySeq(uint32_t seq)
     {
-        RecursiveGuard l(x_seq2Callback);
+        ReadGuard l(x_seq2Callback);
         auto it = m_seq2Callback->find(seq);
         if (it != m_seq2Callback->end())
         {
@@ -150,8 +155,8 @@ private:
     bool m_actived = false;
 
     ///< A call B, the function to call after the response is received by A.
-    mutable bcos::RecursiveMutex x_seq2Callback;
-    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
+    mutable bcos::SharedMutex x_seq2Callback;
+    std::shared_ptr<tbb::concurrent_unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
     uint64_t m_shutDownTimeThres = 50000;

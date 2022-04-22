@@ -959,6 +959,7 @@ void MemoryStorage::batchRemoveTxsQueue()
 {
     m_worker->enqueue([this]() {
         Transaction::ConstPtr tx;
+        ReadGuard l(x_txpoolMutex);
         while (!m_txsQueue.empty())
         {
             auto ret = m_txsQueue.try_pop(tx);

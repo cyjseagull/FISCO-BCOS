@@ -22,7 +22,8 @@ Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this;
     m_recvBuffer.resize(bufferSize);
-    m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
+    m_seq2Callback =
+        std::make_shared<tbb::concurrent_unordered_map<uint32_t, ResponseCallback::Ptr>>();
 }
 
 Session::~Session()
@@ -254,22 +255,25 @@ void Session::drop(DisconnectReason _reason)
 
     SESSION_LOG(INFO) << "drop, call and erase all callback in this session!"
                       << LOG_KV("endpoint", nodeIPEndpoint());
-    RecursiveGuard l(x_seq2Callback);
-    for (auto& it : *m_seq2Callback)
+
     {
-        if (it.second->timeoutHandler)
+        ReadGuard l(x_seq2Callback);
+        for (auto& it : *m_seq2Callback)
         {
-            it.second->timeoutHandler->cancel();
-        }
-        if (it.second->callback)
-        {
-            SESSION_LOG(TRACE) << "drop, call callback by seq" << LOG_KV("seq", it.first);
-            if (server)
+            if (it.second->timeoutHandler)
             {
-                auto callback = it.second;
-                server->threadPool()->enqueue([callback, errorCode, errorMsg]() {
-                    callback->callback(NetworkException(errorCode, errorMsg), Message::Ptr());
-                });
+                it.second->timeoutHandler->cancel();
+            }
+            if (it.second->callback)
+            {
+                SESSION_LOG(TRACE) << "drop, call callback by seq" << LOG_KV("seq", it.first);
+                if (server)
+                {
+                    auto callback = it.second;
+                    server->threadPool()->enqueue([callback, errorCode, errorMsg]() {
+                        callback->callback(NetworkException(errorCode, errorMsg), Message::Ptr());
+                    });
+                }
             }
         }
     }
