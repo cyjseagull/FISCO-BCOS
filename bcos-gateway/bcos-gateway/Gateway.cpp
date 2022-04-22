@@ -310,8 +310,8 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, NodeIDPtr _
  * @param _payload: message content
  * @return void
  */
-void Gateway::asyncSendBroadcastMessage(
-    uint16_t _type, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+void Gateway::asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
+    NodeIDPtr _srcNodeID, bytesConstRef _payload, uint16_t _priority)
 {
     // broadcast message to the local nodes
     auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
@@ -325,7 +325,8 @@ void Gateway::asyncSendBroadcastMessage(
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
     // broadcast message to the peers
-    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(_type, _groupID, message);
+    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(
+        _type, _groupID, message, _priority);
 }
 
 /**

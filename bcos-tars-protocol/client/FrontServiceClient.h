@@ -271,16 +271,17 @@ public:
     }
 
     void asyncSendBroadcastMessage(
-        uint16_t _type, int _moduleID, bcos::bytesConstRef _data) override
+        uint16_t _type, int _moduleID, bcos::bytesConstRef _data, uint16_t) override
     {
         auto data = _data.toBytes();
         m_proxy->async_asyncSendBroadcastMessage(
             nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
-    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bcos::bytesPointer _data) override
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bcos::bytesPointer _data, uint16_t _priority = 1) override
     {
-        asyncSendBroadcastMessage(_type, _moduleID, bcos::ref(*_data));
+        asyncSendBroadcastMessage(_type, _moduleID, bcos::ref(*_data), _priority);
     }
 
 private:

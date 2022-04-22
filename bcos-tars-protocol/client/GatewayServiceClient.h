@@ -158,7 +158,7 @@ public:
     }
 
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
+        bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload, uint16_t) override
     {
         auto ret = checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_proxy, nullptr);
         if (!ret)

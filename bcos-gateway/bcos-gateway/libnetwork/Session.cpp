@@ -57,7 +57,8 @@ bool Session::actived() const
     return m_actived && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
-void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
+void Session::asyncSendMessage(
+    Message::Ptr message, Options options, SessionCallbackFunc callback, uint16_t _priority)
 {
     auto server = m_server.lock();
     if (!actived())
@@ -108,7 +109,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                        << LOG_KV("endpoint", nodeIPEndpoint());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
-    send(message->ext(), p_buffer);
+    send(_priority, p_buffer);
 }
 
 void Session::send(uint16_t _priority, std::shared_ptr<bytes> _msg)
@@ -315,9 +316,9 @@ void Session::drop(DisconnectReason _reason)
             {
                 socket->close();
             }
-            auto shutdown_timer =
-                std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService(),
-                    boost::posix_time::milliseconds(m_shutDownTimeThres));
+            auto shutdown_timer = std::make_shared<boost::asio::deadline_timer>(
+                boost::asio::make_strand(*server->asioInterface()->ioService()),
+                boost::posix_time::milliseconds(m_shutDownTimeThres));
             /// async wait for shutdown
             shutdown_timer->async_wait([socket](const boost::system::error_code& error) {
                 /// drop operation has been aborted
@@ -603,10 +604,10 @@ void Session::setHost(std::weak_ptr<Host> host)
     auto server = m_server.lock();
     if (server && server->haveNetwork())
     {
-        m_readIdleTimer =
-            std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService());
-        m_writeIdleTimer =
-            std::make_shared<boost::asio::deadline_timer>(*server->asioInterface()->ioService());
+        m_readIdleTimer = std::make_shared<boost::asio::deadline_timer>(
+            boost::asio::make_strand(*server->asioInterface()->ioService()));
+        m_writeIdleTimer = std::make_shared<boost::asio::deadline_timer>(
+            boost::asio::make_strand(*server->asioInterface()->ioService()));
     }
     else
     {

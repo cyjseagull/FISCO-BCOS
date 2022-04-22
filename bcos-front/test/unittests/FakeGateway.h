@@ -98,7 +98,8 @@ public:
      * @return void
      */
     void asyncSendBroadcastMessage(uint16_t, const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload,
+        uint16_t _priority = 1) override;
 
     void asyncNotifyGroupInfo(
         bcos::group::GroupInfo::Ptr, std::function<void(Error::Ptr&&)>) override

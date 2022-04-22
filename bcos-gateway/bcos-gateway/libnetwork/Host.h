@@ -174,6 +174,7 @@ private:
     bool m_run = false;
 
     std::shared_ptr<std::thread> m_hostThread;
+    std::vector<std::thread> m_workers;
 
     P2PInfo m_p2pInfo;
 };

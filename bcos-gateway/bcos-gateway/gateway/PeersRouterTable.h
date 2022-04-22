@@ -54,7 +54,8 @@ public:
     using Group2NodeIDListType = std::map<std::string, std::set<std::string>>;
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
-    void asyncBroadcastMsg(uint16_t _type, std::string const& _group, P2PMessage::Ptr _msg);
+    void asyncBroadcastMsg(
+        uint16_t _type, std::string const& _group, P2PMessage::Ptr _msg, uint16_t _priority = 1);
 
 protected:
     void batchInsertNodeList(

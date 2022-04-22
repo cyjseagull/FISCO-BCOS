@@ -12,7 +12,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-
+#include <bcos-utilities/Timer.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -54,7 +54,8 @@ public:
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) override;
+        CallbackFuncWithSession callback, Options options = Options(),
+        uint16_t _priority = 1) override;
 
     void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) override;
 
@@ -110,7 +111,7 @@ public:
     }
 
     void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-        Options options, P2PResponseCallback _callback) override;
+        Options options, P2PResponseCallback _callback, uint16_t _priority = 1) override;
 
     void asyncBroadcastMessageToP2PNodes(
         int16_t _type, bytesConstRef _payload, Options _options) override;
@@ -171,7 +172,7 @@ private:
 
     P2pID m_nodeID;
 
-    std::shared_ptr<boost::asio::deadline_timer> m_timer;
+    std::shared_ptr<Timer> m_timer;
 
     bool m_run = false;
 

@@ -44,8 +44,8 @@ public:
     virtual void start() = 0;
     virtual void disconnect(DisconnectReason) = 0;
 
-    virtual void asyncSendMessage(
-        Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
+    virtual void asyncSendMessage(Message::Ptr, Options = Options(),
+        SessionCallbackFunc = SessionCallbackFunc(), uint16_t _priority = 1) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 

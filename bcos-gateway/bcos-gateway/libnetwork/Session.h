@@ -36,8 +36,8 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void asyncSendMessage(
-        Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) override;
+    void asyncSendMessage(Message::Ptr, Options = Options(),
+        SessionCallbackFunc = SessionCallbackFunc(), uint16_t _priority = 1) override;
 
     NodeIPEndpoint nodeIPEndpoint() const override;
 
@@ -148,8 +148,7 @@ private:
     public:
         bool operator()(WriteElement::Ptr _first, WriteElement::Ptr _second)
         {
-            // increase order
-            return _first->m_priority > _second->m_priority;
+            return _first->m_priority < _second->m_priority;
         }
     };
 

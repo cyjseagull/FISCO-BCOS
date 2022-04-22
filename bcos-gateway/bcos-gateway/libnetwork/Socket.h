@@ -26,8 +26,8 @@ public:
     {
         try
         {
-            m_sslSocket =
-                std::make_shared<ba::ssl::stream<bi::tcp::socket>>(_ioService, _sslContext);
+            m_sslSocket = std::make_shared<ba::ssl::stream<bi::tcp::socket>>(
+                boost::asio::make_strand(_ioService), _sslContext);
         }
         catch (const std::exception& _e)
         {

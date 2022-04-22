@@ -228,7 +228,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 
 // broadcast message to given group
 void PeersRouterTable::asyncBroadcastMsg(
-    uint16_t _type, std::string const& _groupID, P2PMessage::Ptr _msg)
+    uint16_t _type, std::string const& _groupID, P2PMessage::Ptr _msg, uint16_t _priority)
 {
     auto startT = utcTime();
     std::vector<std::string> selectedPeers;
@@ -255,7 +255,7 @@ void PeersRouterTable::asyncBroadcastMsg(
             for (size_t i = _r.begin(); i < _r.end(); i++)
             {
                 auto const& peer = selectedPeers[i];
-                m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, nullptr);
+                m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, nullptr, _priority);
             }
         });
     ROUTER_LOG(DEBUG) << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")

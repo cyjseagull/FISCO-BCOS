@@ -98,8 +98,10 @@ public:
      * @param _data: send message data
      * @return void
      */
-    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data) override;
-    void asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesPointer _data) override;
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bytesConstRef _data, uint16_t _priority = 1) override;
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bytesPointer _data, uint16_t _priority = 1) override;
     /**
      * @brief: receive nodeIDs from gateway
      * @param _groupID: groupID

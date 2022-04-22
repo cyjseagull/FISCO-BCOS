@@ -86,7 +86,7 @@ void PBFTCache::onCheckPointTimeout()
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to consensus node
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
     m_timer->restart();
 }
 
@@ -289,7 +289,7 @@ void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesC
         m_precommit->setPacketType(PacketType::DeterministicState);
         auto payLoad = m_config->codec()->encode(m_precommit);
         m_config->frontService()->asyncSendBroadcastMessage(
-            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, payLoad);
+            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, payLoad, 0);
         if (m_reExecHandler && !m_reExecuted)
         {
             m_reExecuted = true;
@@ -501,7 +501,7 @@ bool PBFTCache::checkAndPreCommit()
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
     // only broadcast message to consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
     m_precommitted = true;
     // collect the commitReq and try to commit
     return checkAndCommit();

@@ -19,7 +19,10 @@ using namespace bcos::gateway;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
-Service::Service() {}
+Service::Service()
+{
+    m_timer = std::make_shared<Timer>(CHECK_INTERVEL);
+}
 
 void Service::start()
 {
@@ -40,6 +43,15 @@ void Service::start()
 
         heartBeat();
     }
+    auto self = std::weak_ptr<Service>(shared_from_this());
+    m_timer->registerTimeoutHandler([self]() {
+        auto service = self.lock();
+        if (service && service->host()->haveNetwork())
+        {
+            service->heartBeat();
+        }
+    });
+    m_timer->start();
 }
 
 void Service::stop()
@@ -49,7 +61,7 @@ void Service::stop()
         m_run = false;
         if (m_timer)
         {
-            m_timer->cancel();
+            m_timer->stop();
         }
         m_host->stop();
 
@@ -71,7 +83,7 @@ void Service::heartBeat()
     {
         return;
     }
-
+    m_timer->restart();
     std::map<NodeIPEndpoint, P2pID> staticNodes;
     {
         RecursiveGuard l(x_nodes);
@@ -105,21 +117,6 @@ void Service::heartBeat()
         RecursiveGuard l(x_sessions);
         SERVICE_LOG(INFO) << LOG_DESC("heartBeat") << LOG_KV("connected count", m_sessions.size());
     }
-
-    auto self = std::weak_ptr<Service>(shared_from_this());
-    m_timer = m_host->asioInterface()->newTimer(CHECK_INTERVEL);
-    m_timer->async_wait([self](const boost::system::error_code& error) {
-        if (error)
-        {
-            SERVICE_LOG(WARNING) << "timer canceled" << LOG_KV("errorCode", error);
-            return;
-        }
-        auto service = self.lock();
-        if (service && service->host()->haveNetwork())
-        {
-            service->heartBeat();
-        }
-    });
 }
 
 /// update the staticNodes
@@ -403,8 +400,8 @@ bool Service::connected(std::string const& _nodeID)
     auto it = m_sessions.find(_nodeID);
     return (it != m_sessions.end() && it->second->actived());
 }
-void Service::asyncSendMessageByNodeID(
-    P2pID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession callback, Options options)
+void Service::asyncSendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr message,
+    CallbackFuncWithSession callback, Options options, uint16_t _priority)
 {
     try
     {
@@ -426,18 +423,20 @@ void Service::asyncSendMessageByNodeID(
             auto session = it->second;
             if (callback)
             {
-                session->session()->asyncSendMessage(message, options,
+                session->session()->asyncSendMessage(
+                    message, options,
                     [session, callback](NetworkException e, Message::Ptr message) {
                         P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
                         if (callback)
                         {
                             callback(e, session, p2pMessage);
                         }
-                    });
+                    },
+                    _priority);
             }
             else
             {
-                session->session()->asyncSendMessage(message, options, nullptr);
+                session->session()->asyncSendMessage(message, options, nullptr, _priority);
             }
         }
         else
@@ -530,7 +529,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
 }
 
 void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
-    Options _options, P2PResponseCallback _callback)
+    Options _options, P2PResponseCallback _callback, uint16_t _priority)
 {
     if (!connected(_dstNodeID))
     {
@@ -565,7 +564,7 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
                 _callback(nullptr, packetType, _p2pMessage->payload());
             }
         },
-        _options);
+        _options, _priority);
 }
 
 void Service::asyncBroadcastMessageToP2PNodes(

@@ -337,7 +337,8 @@ void FrontService::asyncSendMessageByNodeIDs(
  * @param _data: send message data
  * @return void
  */
-void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
+void FrontService::asyncSendBroadcastMessage(
+    uint16_t _type, int _moduleID, bytesConstRef _data, uint16_t _priority)
 {
     auto message = messageFactory()->buildMessage();
     message->setModuleID(_moduleID);
@@ -347,13 +348,14 @@ void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, byte
     message->encode(*buffer.get());
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        _type, m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()), _priority);
 }
 
-void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesPointer _data)
+void FrontService::asyncSendBroadcastMessage(
+    uint16_t _type, int _moduleID, bytesPointer _data, uint16_t _priority)
 {
-    m_threadPool->enqueue([this, _type, _moduleID, _data]() {
-        asyncSendBroadcastMessage(_type, _moduleID, ref(*_data));
+    m_threadPool->enqueue([this, _type, _moduleID, _data, _priority]() {
+        asyncSendBroadcastMessage(_type, _moduleID, ref(*_data), _priority);
     });
 }
 

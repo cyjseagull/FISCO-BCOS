@@ -100,7 +100,7 @@ public:
      * @return void
      */
     virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload, uint16_t _priority = 1) = 0;
 
     /// multi-group related interfaces
 

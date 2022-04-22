@@ -53,7 +53,7 @@ public:
     virtual std::shared_ptr<boost::asio::deadline_timer> newTimer(uint32_t timeout)
     {
         return std::make_shared<boost::asio::deadline_timer>(
-            *m_ioService, boost::posix_time::milliseconds(timeout));
+            boost::asio::make_strand(*m_ioService), boost::posix_time::milliseconds(timeout));
     }
 
     virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
@@ -68,9 +68,9 @@ public:
     virtual void init(std::string listenHost, uint16_t listenPort)
     {
         m_strand = std::make_shared<boost::asio::io_service::strand>(*m_ioService);
-        m_resolver = std::make_shared<bi::tcp::resolver>(*m_ioService);
-        m_acceptor = std::make_shared<bi::tcp::acceptor>(
-            *m_ioService, bi::tcp::endpoint(bi::make_address(listenHost), listenPort));
+        m_resolver = std::make_shared<bi::tcp::resolver>(boost::asio::make_strand(*m_ioService));
+        m_acceptor = std::make_shared<bi::tcp::acceptor>(boost::asio::make_strand(*m_ioService),
+            bi::tcp::endpoint(bi::make_address(listenHost), listenPort));
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);
     }

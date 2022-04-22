@@ -45,7 +45,7 @@ public:
         P2pID nodeID, std::shared_ptr<P2PMessage> message) = 0;
 
     virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, Options options = Options()) = 0;
+        CallbackFuncWithSession callback, Options options = Options(), uint16_t _priority = 1) = 0;
 
     virtual void asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Options options) = 0;
 
@@ -71,7 +71,8 @@ public:
      * @param _callback called when receive response
      */
     virtual void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID,
-        bytesConstRef _payload, Options options, P2PResponseCallback _callback) = 0;
+        bytesConstRef _payload, Options options, P2PResponseCallback _callback,
+        uint16_t _priority = 1) = 0;
 
     /**
      * @brief broadcast message to all p2p nodes

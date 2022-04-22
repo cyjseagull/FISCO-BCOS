@@ -656,7 +656,7 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     auto encodedData = m_config->codec()->encode(newViewMsg);
     // only broadcast message to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
 
     m_newViewGenerated = true;
     PBFT_LOG(INFO) << LOG_DESC("The next leader broadcast NewView request")

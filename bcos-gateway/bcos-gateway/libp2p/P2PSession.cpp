@@ -34,7 +34,7 @@ void P2PSession::start()
         m_run = true;
 
         m_session->start();
-        heartBeat();
+        // heartBeat();
     }
 }
 

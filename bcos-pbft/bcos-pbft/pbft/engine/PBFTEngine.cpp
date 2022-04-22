@@ -173,7 +173,7 @@ void PBFTEngine::onProposalApplySuccess(
     auto encodedData = m_config->codec()->encode(checkPointMsg);
     // only broadcast message to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
     // restart the timer when proposal execute finished to in case of timeout
@@ -311,7 +311,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
         auto encodedData = m_config->codec()->encode(pbftMessage);
         // only broadcast pbft message to the consensus nodes
         m_config->frontService()->asyncSendBroadcastMessage(
-            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
     }
     else
     {
@@ -841,7 +841,7 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg)
 
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
 
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
@@ -1013,7 +1013,7 @@ void PBFTEngine::broadcastViewChangeReq()
 
     // only broadcast to the consensus nodes
     m_config->frontService()->asyncSendBroadcastMessage(
-        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData);
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, encodedData, 0);
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq);
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
