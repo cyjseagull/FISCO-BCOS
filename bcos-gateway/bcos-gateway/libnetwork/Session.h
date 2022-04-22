@@ -6,12 +6,11 @@
 
 #pragma once
 
+#include "tbb/concurrent_priority_queue.h"
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-utilities/Common.h>
-#include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
 #include <memory>
@@ -102,7 +101,7 @@ public:
     }
 
 private:
-    void send(std::shared_ptr<bytes> _msg);
+    void send(uint16_t _priority, std::shared_ptr<bytes> _msg);
 
     void doRead();
     std::vector<byte> m_data;  ///< Buffer for ingress packet data.
@@ -131,21 +130,30 @@ private:
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
 
     MessageFactory::Ptr m_messageFactory;
+    struct WriteElement
+    {
+        using Ptr = std::shared_ptr<WriteElement>;
+        WriteElement() = default;
+        WriteElement(uint16_t _priority, std::shared_ptr<bytes> _payload)
+          : m_priority(_priority), m_payLoad(_payload)
+        {}
+        virtual ~WriteElement() {}
 
-    class QueueCompare
+        uint16_t m_priority;
+        std::shared_ptr<bytes> m_payLoad;
+    };
+
+    struct QueueCompare
     {
     public:
-        bool operator()(const std::pair<std::shared_ptr<bytes>, u256>&,
-            const std::pair<std::shared_ptr<bytes>, u256>&) const
+        bool operator()(WriteElement::Ptr _first, WriteElement::Ptr _second)
         {
-            return false;
+            // increase order
+            return _first->m_priority > _second->m_priority;
         }
     };
 
-    /*boost::heap::priority_queue<std::pair<std::shared_ptr<bytes>, u256>,
-        boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
-        m_writeQueue;*/
-    tbb::concurrent_bounded_queue<std::shared_ptr<bytes>> m_writeQueue;
+    tbb::concurrent_priority_queue<WriteElement::Ptr, QueueCompare> m_writeQueue;
 
     std::atomic_bool m_writing = {false};
     bcos::Mutex x_writeQueue;

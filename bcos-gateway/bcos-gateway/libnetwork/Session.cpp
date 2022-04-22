@@ -108,10 +108,10 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
                        << LOG_KV("endpoint", nodeIPEndpoint());
     std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
     message->encode(*p_buffer);
-    send(p_buffer);
+    send(message->ext(), p_buffer);
 }
 
-void Session::send(std::shared_ptr<bytes> _msg)
+void Session::send(uint16_t _priority, std::shared_ptr<bytes> _msg)
 {
     if (!actived())
     {
@@ -123,7 +123,8 @@ void Session::send(std::shared_ptr<bytes> _msg)
 
     SESSION_LOG(TRACE) << "send" << LOG_KV("writeQueue size", m_writeQueue.size());
     {
-        m_writeQueue.push(_msg);
+        auto element = std::make_shared<WriteElement>(_priority, _msg);
+        m_writeQueue.push(element);
     }
 
     write();
@@ -186,12 +187,13 @@ void Session::write()
             return;
         }
 
-        std::shared_ptr<bytes> buffer;
-        auto ret = m_writeQueue.try_pop(buffer);
+        WriteElement::Ptr task;
+        auto ret = m_writeQueue.try_pop(task);
         if (!ret)
         {
             return;
         }
+        auto buffer = task->m_payLoad;
         auto session = shared_from_this();
 
         auto server = m_server.lock();
