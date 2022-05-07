@@ -590,8 +590,6 @@ void BlockExecutive::DMCExecute(
                 batchStatus->finished++;
             }
 
-            DMC_LOG(TRACE) << " t  <---- " << batchStatus->total << " | " << batchStatus->paused
-                           << " | " << batchStatus->finished << std::endl;
             // check batch
             if ((batchStatus->error + batchStatus->paused + batchStatus->finished) !=
                 batchStatus->total)
@@ -614,9 +612,6 @@ void BlockExecutive::DMCExecute(
             }
 
             // handle batch result(only one thread can get in here)
-            DMC_LOG(TRACE) << " T  <---- " << batchStatus->total << " | " << batchStatus->paused
-                           << " | " << batchStatus->finished << std::endl;
-
             if (batchStatus->error != 0)
             {
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
