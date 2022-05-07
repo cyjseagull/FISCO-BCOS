@@ -28,6 +28,7 @@ public:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr dispatchExecutor(
         const std::string_view& contract);
 
+
     void removeExecutor(const std::string_view& name);
 
     auto begin() const
@@ -44,7 +45,6 @@ public:
 
     size_t size() const { return m_name2Executors.size(); }
 
-private:
     struct ExecutorInfo
     {
         using Ptr = std::shared_ptr<ExecutorInfo>;
@@ -54,6 +54,9 @@ private:
         std::set<std::string> contracts;
     };
 
+    ExecutorInfo::Ptr getExecutorInfo(const std::string_view& contract);
+
+private:
     struct ExecutorInfoComp
     {
         bool operator()(const ExecutorInfo::Ptr& lhs, const ExecutorInfo::Ptr& rhs) const

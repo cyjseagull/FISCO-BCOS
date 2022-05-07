@@ -35,23 +35,12 @@ bool DmcExecutor::prepare()
     m_executivePool.forEachAndClear(ExecutivePool::MessageHint::NEED_PREPARE,
         [this](int64_t contextID, ExecutiveState::Ptr executiveState) {
             auto hint = handleExecutiveMessage(executiveState);
-            switch (hint)
-            {
-            case MessageHint::NEED_SEND:
-            case MessageHint::NEED_SCHEDULE_OUT:
-            case MessageHint::LOCKED:
-            case MessageHint::END:
-            {
+            m_executivePool.markAs(contextID, hint);
+
 #ifdef DMC_TRACE_LOG_ENABLE
-                DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
-                               << ExecutivePool::toString(hint) << std::endl;
+            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " "
+                           << ExecutivePool::toString(hint) << std::endl;
 #endif
-                m_executivePool.markAs(contextID, hint);
-                break;
-            }
-            default:
-                break;
-            }
             return true;
         });
 
@@ -204,7 +193,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             message->setKeyLocks(std::move(keyLocks));
 #ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " 4.SendToExecutor:\t >>>> " << executiveState->toString()
-                           << " >>>> flowAddr:" << m_contractAddress << std::endl;
+                           << " >>>> [" << m_name << "]:" << m_contractAddress << std::endl;
 #endif
             messages->push_back(std::move(message));
 
@@ -333,17 +322,18 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::REVERT:
     {
         executiveState->callStack.pop();
-        // Empty stack, execution is finished
         if (executiveState->callStack.empty())
         {
+            // Empty stack, execution is finished
             f_onTxFinished(std::move(message));
             return MessageHint::END;
         }
-
-        message->setSeq(executiveState->callStack.top());
-        message->setCreate(false);
-
-        return MessageHint::NEED_SEND;
+        else
+        {
+            message->setSeq(executiveState->callStack.top());
+            message->setCreate(false);
+            return MessageHint::NEED_SEND;
+        }
     }
         // Retry type, send again
     case protocol::ExecutionMessage::KEY_LOCK:
@@ -381,8 +371,8 @@ void DmcExecutor::handleExecutiveOutputs(
         ExecutiveState::Ptr executiveState = m_executivePool.get(contextID);
         executiveState->message = std::move(output);
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< addr:" << m_contractAddress << " <<<< "
-                       << executiveState->toString() << std::endl;
+        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< [" << m_name << "]:" << m_contractAddress
+                       << " <<<< " << executiveState->toString() << std::endl;
 #endif
 
         if (to == m_contractAddress)

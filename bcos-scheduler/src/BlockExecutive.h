@@ -93,6 +93,7 @@ private:
         std::atomic_size_t success = 0;
         std::atomic_size_t failed = 0;
         std::function<void(const CommitStatus&)> checkAndCommit;
+        mutable SharedMutex x_lock;
     };
     void batchNextBlock(std::function<void(Error::UniquePtr)> callback);
     void batchGetHashes(std::function<void(Error::UniquePtr, crypto::HashType)> callback);
