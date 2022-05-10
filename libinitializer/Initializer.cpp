@@ -43,6 +43,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
+#include <bcos-scheduler/src/SchedulerServer.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
@@ -142,38 +143,47 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
 
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-    m_scheduler = SchedulerInitializer::build(executorManager, ledger, schedulerStorage,
+    auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+
+    m_scheduler = std::make_shared<bcos::scheduler::SchedulerServer>(factory);
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
         m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
-    std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
-    if (m_nodeConfig->enableLRUCacheStorage())
+    for (int i = 0; i < 5; i++)
     {
-        cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-        cache->setMaxCapacity(m_nodeConfig->cacheSize());
-        INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
-                              << m_nodeConfig->cacheSize();
-    }
-    else
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
-    }
+        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+        if (m_nodeConfig->enableLRUCacheStorage())
+        {
+            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            INITIALIZER_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                                  << m_nodeConfig->cacheSize();
+        }
+        else
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+        }
 
-    if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
-    {
-        INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
-                              << LOG_KV("nodeArchType", _nodeArchType);
-        // Note: ensure that there has at least one executor before pbft/sync execute block
-        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
-        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-        executorManager->addExecutor("default", parallelExecutor);
+        if (_nodeArchType != bcos::protocol::NodeArchitectureType::MAX)
+        {
+            INITIALIZER_LOG(INFO) << LOG_DESC("create Executor")
+                                  << LOG_KV("nodeArchType", _nodeArchType);
+
+            // Note: ensure that there has at least one executor before pbft/sync execute block
+            std::string executorName = "executor-" + std::to_string(i);
+            auto executorFactory = ExecutorInitializer::buildFactory(m_ledger,
+                m_txpoolInitializer->txpool(), cache, storage, executionMessageFactory,
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isWasm(),
+                m_nodeConfig->isAuthCheck(), executorName);
+            auto parallelExecutor =
+                std::make_shared<bcos::initializer::ParallelExecutor>(executorFactory);
+            executorManager->addExecutor(executorName, parallelExecutor);
+        }
     }
 
     // build and init the pbft related modules
@@ -239,9 +249,10 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
     // init handlers
     auto nodeName = m_nodeConfig->nodeName();
     auto groupID = m_nodeConfig->groupId();
-    auto schedulerImpl = std::dynamic_pointer_cast<scheduler::SchedulerImpl>(m_scheduler);
+    auto schedulerFactory =
+        dynamic_pointer_cast<scheduler::SchedulerServer>(m_scheduler)->getFactory();
     // notify blockNumber
-    schedulerImpl->registerBlockNumberReceiver(
+    schedulerFactory->setBlockNumberReceiver(
         [_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
             INITIALIZER_LOG(INFO) << "Notify blocknumber: " << number;
             // Note: the interface will notify blockNumber to all rpc nodes in pro/max mode
@@ -249,7 +260,7 @@ void Initializer::initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc)
         });
     // notify transactions
     auto txpool = m_txpoolInitializer->txpool();
-    schedulerImpl->registerTransactionNotifier(
+    schedulerFactory->setTransactionNotifier(
         [txpool](bcos::protocol::BlockNumber _blockNumber,
             bcos::protocol::TransactionSubmitResultsPtr _result,
             std::function<void(bcos::Error::Ptr)> _callback) {

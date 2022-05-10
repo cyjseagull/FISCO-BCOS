@@ -786,7 +786,7 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
                         LEDGER_LOG(WARNING) << "Entry doesn't exists";
                     }
 
-                    LEDGER_LOG(TRACE) << "Entry value: " << entry->get();
+                    LEDGER_LOG(TRACE) << "Entry value: " << toHexString(entry->get());
 
                     auto [value, number] = entry->getObject<SystemConfigEntry>();
 

@@ -25,7 +25,7 @@
 
 using namespace bcostars;
 
-void ExecutorServiceClient::nextBlockHeader(
+void ExecutorServiceClient::nextBlockHeader(int64_t schedulerTermId,
     const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
     std::function<void(bcos::Error::UniquePtr)> callback)
 {
