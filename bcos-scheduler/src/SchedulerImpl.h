@@ -127,7 +127,8 @@ public:
             blockExecutive.start();
         }
 
-        std::cout << "[Scheduler] start with session: " << getSchedulerTermId() << std::endl;
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("Switch") << "Start with termId: " << getSchedulerTermId()
+                             << std::endl;
     }
     void stop()
     {

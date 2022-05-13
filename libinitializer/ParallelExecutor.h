@@ -35,11 +35,8 @@ public:
                 }
 
                 // TODO: check cycle reference in executor to avoid memory leak
-                EXECUTOR_LOG(DEBUG) << "Build new executor instance with "
+                EXECUTOR_LOG(DEBUG) << LOG_BADGE("Switch") << "Build new executor instance with "
                                     << LOG_KV("schedulerTermId", schedulerTermId);
-
-                std::cout << "Build new executor instance with "
-                          << LOG_KV("schedulerTermId", schedulerTermId) << std::endl;
                 m_executor = m_factory->build();
 
                 m_schedulerTermId = schedulerTermId;

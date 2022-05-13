@@ -84,7 +84,6 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     schedulerServer->registerOnSwitchTermHandler(
         [pbftEngine](bcos::protocol::BlockNumber blockNumber) {
             PBFT_LOG(DEBUG) << LOG_BADGE("Switch") << "Receive scheduler switch term notify";
-            std::cout << "Receive scheduler switch term notify" << std::endl;
             pbftEngine->resetCheckPoint(blockNumber);
         });
 
