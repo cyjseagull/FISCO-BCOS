@@ -148,7 +148,9 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
         m_protocolInitializer->txResultFactory(), m_protocolInitializer->cryptoSuite()->hashImpl(),
         m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
 
-    m_scheduler = std::make_shared<bcos::scheduler::SchedulerServer>(factory);
+    int64_t schedulerSeq =
+        0;  // In Max node, this seq will be update after consensus module switch to a leader
+    m_scheduler = std::make_shared<bcos::scheduler::SchedulerServer>(schedulerSeq, factory);
 
     // init the txpool
     m_txpoolInitializer = std::make_shared<TxPoolInitializer>(

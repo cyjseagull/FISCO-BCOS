@@ -89,6 +89,9 @@ public:
 
     virtual void restart();
 
+    // let the engine restart to query scheduler from given 'blockNumber'
+    void resetCheckPoint(bcos::protocol::BlockNumber blockNumber);
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,

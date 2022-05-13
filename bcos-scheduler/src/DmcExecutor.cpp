@@ -26,7 +26,7 @@ bool DmcExecutor::prepare()
 #ifdef DMC_TRACE_LOG_ENABLE
     // logging
     m_executivePool.forEach(MessageHint::ALL, [](int64_t, ExecutiveState::Ptr executiveState) {
-        DMC_LOG(TRACE) << " 1.PendingMsg: \t [--] " << executiveState->toString() << std::endl;
+        DMC_LOG(TRACE) << " 1.PendingMsg: \t\t [--] " << executiveState->toString() << std::endl;
         return true;
     });
 #endif

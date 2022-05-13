@@ -25,6 +25,8 @@
 #include "protocol/PB/PBFTMessageFactoryImpl.h"
 #include "storage/LedgerStorage.h"
 #include "utilities/Common.h"
+#include <bcos-scheduler/src/SchedulerServer.h>
+#include <memory>
 
 using namespace bcos;
 using namespace bcos::consensus;
@@ -76,5 +78,15 @@ PBFTImpl::Ptr PBFTFactory::createPBFT()
     auto ledgerFetcher = std::make_shared<bcos::tool::LedgerConfigFetcher>(m_ledger);
     auto pbft = std::make_shared<PBFTImpl>(pbftEngine);
     pbft->setLedgerFetcher(ledgerFetcher);
+
+    // PBFT and scheduler are in the same process here, we just cast m_scheduler to SchedulerService
+    auto schedulerServer = std::dynamic_pointer_cast<bcos::scheduler::SchedulerServer>(m_scheduler);
+    schedulerServer->registerOnSwitchTermHandler(
+        [pbftEngine](bcos::protocol::BlockNumber blockNumber) {
+            PBFT_LOG(DEBUG) << LOG_BADGE("Switch") << "Receive scheduler switch term notify";
+            std::cout << "Receive scheduler switch term notify" << std::endl;
+            pbftEngine->resetCheckPoint(blockNumber);
+        });
+
     return pbft;
 }

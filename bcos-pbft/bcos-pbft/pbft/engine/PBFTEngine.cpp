@@ -1433,13 +1433,19 @@ void PBFTEngine::onReceivePrecommitRequest(
                    << LOG_KV("index", pbftRequest->index());
 }
 
-void PBFTEngine::onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader)
+
+void PBFTEngine::resetCheckPoint(bcos::protocol::BlockNumber blockNumber)
 {
     RecursiveGuard l(m_mutex);
     m_config->timer()->restart();
-    m_cacheProcessor->resetUnCommittedCacheState(_blockHeader->number());
-    m_config->setExpectedCheckPoint(_blockHeader->number());
+    m_cacheProcessor->resetUnCommittedCacheState(blockNumber);
+    m_config->setExpectedCheckPoint(blockNumber);
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
     m_cacheProcessor->tryToApplyCommitQueue();
+}
+
+void PBFTEngine::onStableCheckPointCommitFailed(bcos::protocol::BlockHeader::Ptr _blockHeader)
+{
+    resetCheckPoint(_blockHeader->number());
 }

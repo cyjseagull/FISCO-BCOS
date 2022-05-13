@@ -180,10 +180,12 @@ void TransactionExecutor::nextBlockHeader(int64_t schedulerTermId,
 
                 // check storage block Number
                 auto storageBlockNumber = getBlockNumberInStorage();
-                std::cout << LOG_BADGE(m_name + "-" + std::to_string(m_schedulerTermId))
-                          << "Executor load from backend storage, check storage blockNumber"
-                          << LOG_KV("storageBlockNumber", storageBlockNumber)
-                          << LOG_KV("requestBlockNumber", blockHeader->number()) << std::endl;
+                EXECUTOR_LOG(DEBUG)
+                    << LOG_BADGE("Switch")
+                    << LOG_BADGE(m_name + "-" + std::to_string(m_schedulerTermId))
+                    << "Executor load from backend storage, check storage blockNumber"
+                    << LOG_KV("storageBlockNumber", storageBlockNumber)
+                    << LOG_KV("requestBlockNumber", blockHeader->number()) << std::endl;
                 if (blockHeader->number() - storageBlockNumber != 1)
                 {
                     auto fmt = boost::format(

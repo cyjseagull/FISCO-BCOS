@@ -42,13 +42,13 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerSeq)
     {
         bcos::scheduler::SchedulerFactory factory(std::move(executorManager), std::move(_ledger),
             std::move(storage), executionMessageFactory, std::move(blockFactory),
             std::move(transactionSubmitResultFactory), std::move(hashImpl), isAuthCheck, isWasm);
 
-        return factory.build();
+        return factory.build(schedulerSeq);
     }
 
     static bcos::scheduler::SchedulerFactory::Ptr buildFactory(

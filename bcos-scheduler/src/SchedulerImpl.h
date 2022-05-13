@@ -25,7 +25,7 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm, int64_t schedulerTermId)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
@@ -35,7 +35,7 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm),
-        m_schedulerTermId(utcTime())  // TODO: use "etcd lock seq" + "utctime()" as this
+        m_schedulerTermId(schedulerTermId)
     {
         start();
     }
@@ -127,7 +127,7 @@ public:
             blockExecutive.start();
         }
 
-        std::cout << "[Scheduler] start with session: " << m_schedulerTermId << std::endl;
+        std::cout << "[Scheduler] start with session: " << getSchedulerTermId() << std::endl;
     }
     void stop()
     {
@@ -137,6 +137,7 @@ public:
             blockExecutive.stop();
         }
     }
+
 
 private:
     void asyncGetLedgerConfig(
