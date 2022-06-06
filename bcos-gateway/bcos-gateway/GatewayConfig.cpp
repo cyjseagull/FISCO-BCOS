@@ -129,7 +129,9 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         m_wsConfig = std::make_shared<boostssl::ws::WsConfig>();
-
+        m_wsConfig->setThreadPoolSize(std::thread::hardware_concurrency());
+        // 100MB
+        m_wsConfig->setMaxMsgSize(100 * 1024 * 1024);
         initP2PConfig(pt, _uuidRequired);
         initWsConfig(pt);
     }
