@@ -32,9 +32,15 @@ public:
     P2PMessageV2() : P2PMessage() {}
     ~P2PMessageV2() override {}
 
+    void setSendTime(uint64_t _time) { m_sendTime = _time; }
+    uint64_t sendTime() const { return m_sendTime; }
+
 protected:
     ssize_t decodeHeader(bytesConstRef _buffer) override;
     bool encodeHeader(bytes& _buffer) override;
+
+protected:
+    uint64_t m_sendTime = 0;
 };
 
 class P2PMessageFactoryV2 : public P2PMessageFactory

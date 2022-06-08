@@ -160,6 +160,12 @@ public:
                (m_packetType == GatewayMessageType::BroadcastMessage);
     }
 
+    void setReceiveTime(uint64_t _time) { m_receiveTime = _time; }
+    uint64_t receiveTime() const { return m_receiveTime; }
+
+    void setHandleCallbackTime(uint64_t _time) { m_handleCallbackTime = _time; }
+    uint64_t handleCallbackTime() const { return m_handleCallbackTime; }
+
 protected:
     virtual ssize_t decodeHeader(bytesConstRef _buffer);
     virtual bool encodeHeader(bytes& _buffer);
@@ -171,6 +177,9 @@ protected:
     uint16_t m_packetType = 0;
     std::string m_seq;
     uint16_t m_ext = 0;
+
+    uint64_t m_receiveTime;
+    uint64_t m_handleCallbackTime;
 
     // the src p2pNodeID, for message forward, only encode into the P2PMessageV2
     std::string m_srcP2PNodeID;

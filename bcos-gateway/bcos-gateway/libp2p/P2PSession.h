@@ -72,6 +72,7 @@ public:
     }
 
     void onMessage(bcos::boostssl::MessageFace::Ptr _message) override;
+    void onReadPacket(boost::beast::flat_buffer& _buffer) override;
 
 private:
     /// gateway p2p info

@@ -21,6 +21,7 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
@@ -467,9 +468,15 @@ void Gateway::onReceiveBroadcastMessage(
         m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
     auto groupID = _msg->options()->groupID();
     auto type = _msg->ext();
-    GATEWAY_LOG(TRACE) << LOG_DESC("onReceiveBroadcastMessage")
-                       << LOG_KV("src", _msg->srcP2PNodeID())
-                       << LOG_KV("dst", _msg->dstP2PNodeID());
+    auto msg = std::dynamic_pointer_cast<P2PMessageV2>(_msg);
+    GATEWAY_LOG(INFO) << LOG_DESC("onReceiveBroadcastMessage")
+                      << LOG_KV("size", _msg->payload()->size())
+                      << LOG_KV("receiveTime", (utcTime() - msg->sendTime()))
+                      << LOG_KV("networkTime", (msg->receiveTime() - msg->sendTime()))
+                      << LOG_KV("handleCallbackTime", (utcTime() - msg->receiveTime()));
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,
         bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    auto errorCode = std::to_string((int)protocol::CommonError::SUCCESS);
+    m_p2pInterface->sendRespMessageBySession(
+        bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _p2pSession);
 }

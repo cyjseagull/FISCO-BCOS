@@ -43,6 +43,13 @@ bool P2PMessageV2::encodeHeader(bytes& _buffer)
                           << LOG_KV("dstP2PNodeID length", m_dstP2PNodeID.size());
         return false;
     }
+    // encode sendTime
+    auto sendTimeStr = boost::lexical_cast<std::string>(m_sendTime);
+    uint16_t sendTimeLenData =
+        boost::asio::detail::socket_ops::host_to_network_short((uint16_t)sendTimeStr.size());
+    _buffer.insert(_buffer.end(), (byte*)&sendTimeLenData, (byte*)&sendTimeLenData + 2);
+    _buffer.insert(_buffer.end(), sendTimeStr.begin(), sendTimeStr.end());
+
     // encode srcP2PNodeID
     auto srcP2PNodeIDLen =
         boost::asio::detail::socket_ops::host_to_network_short(m_srcP2PNodeID.size());
@@ -64,6 +71,15 @@ ssize_t P2PMessageV2::decodeHeader(bytesConstRef _buffer)
     {
         return offset;
     }
+    // decode sendTime
+    uint16_t sendTimeLen =
+        boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    offset += 2;
+    std::string sendTimeStr;
+    sendTimeStr.assign(&_buffer[offset], &_buffer[offset] + sendTimeLen);
+    m_sendTime = boost::lexical_cast<uint64_t>(sendTimeStr);
+    offset += sendTimeLen;
+
     // decode srcP2PNodeID, the length of srcP2PNodeID is 2-bytes
     uint16_t srcP2PNodeIDLen =
         boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));

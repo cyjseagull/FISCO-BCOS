@@ -16,7 +16,6 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/protocol/ProtocolInfoCodec.h>
-#include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 
@@ -29,7 +28,6 @@ namespace bcos
 namespace gateway
 {
 class P2PMessage;
-class Gateway;
 
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {

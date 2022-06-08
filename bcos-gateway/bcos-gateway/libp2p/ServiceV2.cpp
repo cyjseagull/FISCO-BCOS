@@ -324,7 +324,7 @@ void ServiceV2::sendRespMessageBySession(
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();
     respMessage->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
+    respMessage->setSendTime(utcTime());
     asyncSendMessageByNodeID(respMessage->dstP2PNodeID(), respMessage, nullptr);
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", requestMsg->seq())
                        << LOG_KV("from", respMessage->srcP2PNodeID())

@@ -18,6 +18,7 @@
  * @date 2021-12-29
  */
 #include "PeersRouterTable.h"
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -265,6 +266,22 @@ void PeersRouterTable::asyncBroadcastMsg(
     {
         ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
                           << LOG_KV("type", _type) << LOG_KV("dst", peer);
-        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
+        auto startT = utcTime();
+        auto msgSize = _msg->payload()->size();
+        _msg->setSeq(m_p2pInterface->messageFactory()->newSeq());
+        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg,
+            [startT, msgSize](NetworkException, std::shared_ptr<P2PSession>,
+                std::shared_ptr<P2PMessage> _response) {
+                auto response = std::dynamic_pointer_cast<P2PMessageV2>(_response);
+                ROUTER_LOG(INFO) << LOG_DESC("asyncBroadcastMsg response")
+                                 << LOG_KV("timecost", (utcTime() - startT))
+                                 << LOG_KV("msgSize", msgSize)
+                                 << LOG_KV("responseTime", (utcTime() - response->sendTime()))
+                                 << LOG_KV("networkTime",
+                                        (response->receiveTime() - response->sendTime()))
+                                 << LOG_KV("handleCallbackTime",
+                                        (utcTime() - response->receiveTime()));
+            });
+        ROUTER_LOG(INFO) << LOG_DESC("asyncBroadcastMsg: sendT: ") << (utcTime() - startT);
     }
 }

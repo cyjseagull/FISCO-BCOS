@@ -47,3 +47,21 @@ void P2PSession::onMessage(bcos::boostssl::MessageFace::Ptr _message)
         session->recvMessageHandler()(_message, session);
     });
 }
+
+void P2PSession::onReadPacket(boost::beast::flat_buffer& _buffer)
+{
+    auto data = boost::asio::buffer_cast<byte*>(boost::beast::buffers_front(_buffer.data()));
+    auto size = boost::asio::buffer_size(m_buffer.data());
+
+    auto message = m_messageFactory->buildMessage();
+    if (message->decode(bytesConstRef(data, size)) < 0)
+    {  // invalid packet, stop this session ?
+        WEBSOCKET_SESSION(WARNING) << LOG_BADGE("onReadPacket") << LOG_DESC("decode packet error")
+                                   << LOG_KV("endpoint", endPoint()) << LOG_KV("session", this);
+        return drop(WsError::PacketError);
+    }
+    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+    p2pMessage->setReceiveTime(utcTime());
+    _buffer.consume(_buffer.size());
+    onMessage(message);
+}

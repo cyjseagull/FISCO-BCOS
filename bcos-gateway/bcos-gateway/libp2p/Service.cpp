@@ -9,6 +9,7 @@
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-gateway/libp2p/P2PMessageV2.h>
 #include <bcos-gateway/libp2p/P2PSession.h>  // for P2PSession
 #include <bcos-gateway/libp2p/Service.h>
 #include <boost/random.hpp>
@@ -349,6 +350,8 @@ void Service::onDisconnect(WsSession::Ptr _session)
 void Service::sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
     boostssl::ws::Options _options, RespCallBack _callback)
 {
+    auto msg = std::dynamic_pointer_cast<P2PMessageV2>(_msg);
+    msg->setSendTime(utcTime());
     auto protocolVersion = _p2pSession->protocolInfo()->version();
     _msg->setVersion(protocolVersion);
     _p2pSession->asyncSendMessage(_msg, _options, _callback);
