@@ -450,8 +450,8 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, P2PMessage::Ptr message,
             {
                 // for compatibility_version consideration
                 sendMessageToSession(session, message, options,
-                    [session, callback](bcos::Error::Ptr error,
-                        boostssl::MessageFace::Ptr _wsMessage, std::shared_ptr<WsSession>) {
+                    [callback](bcos::Error::Ptr error, boostssl::MessageFace::Ptr _wsMessage,
+                        std::shared_ptr<WsSession> _session) {
                         if (error)
                         {
                             SERVICE_LOG(WARNING) << LOG_DESC("sendMessage error")
@@ -464,7 +464,7 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, P2PMessage::Ptr message,
                         if (callback)
                         {
                             NetworkException e(error);
-                            callback(e, session, p2pMessage);
+                            callback(e, _session, p2pMessage);
                         }
                     });
             }
