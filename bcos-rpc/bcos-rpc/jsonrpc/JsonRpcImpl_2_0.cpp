@@ -63,12 +63,18 @@ void JsonRpcImpl_2_0::handleRpcRequest(
     // Note: Clean up request data to prevent taking up too much memory
     bytes emptyBuffer;
     _msg->payload()->swap(emptyBuffer);
-    onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
-        if (_session && _session->isConnected())
+    auto weakedSession = std::weak_ptr<boostssl::ws::WsSession>(_session);
+    onRPCRequest(req, [req, _msg, weakedSession](const std::string& _resp) {
+        auto session = weakedSession.lock();
+        if (!session)
+        {
+            return;
+        }
+        if (session && session->isConnected())
         {
             auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
             _msg->setPayload(buffer);
-            _session->asyncSendMessage(_msg);
+            session->asyncSendMessage(_msg);
         }
         else
         {
@@ -78,7 +84,7 @@ void JsonRpcImpl_2_0::handleRpcRequest(
                               << LOG_KV("req", req) << LOG_KV("resp", _resp)
                               << LOG_KV("seq", _msg->seq())
                               << LOG_KV(
-                                     "endpoint", _session ? _session->endPoint() : std::string(""));
+                                     "endpoint", session ? session->endPoint() : std::string(""));
         }
     });
 }
