@@ -461,10 +461,11 @@ void Service::asyncSendMessageByNodeID(P2pID p2pID, P2PMessage::Ptr message,
                         }
                         P2PMessage::Ptr p2pMessage =
                             std::dynamic_pointer_cast<P2PMessage>(_wsMessage);
+                        auto p2pSession = std::dynamic_pointer_cast<P2PSession>(_session);
                         if (callback)
                         {
                             NetworkException e(error);
-                            callback(e, _session, p2pMessage);
+                            callback(e, p2pSession, p2pMessage);
                         }
                     });
             }

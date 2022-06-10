@@ -190,10 +190,10 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 return;
             }
             auto p2pID = randomChooseP2pID();
-            auto self = shared_from_this();
+            // auto self = shared_from_this();
             auto startT = utcTime();
-            auto callback = [self, startT, p2pID](NetworkException e,
-                                std::shared_ptr<P2PSession> session,
+            auto callback = [startT, p2pID, dstNodeID = m_dstNodeID, respFunc = m_respFunc](
+                                NetworkException e, std::shared_ptr<P2PSession> session,
                                 std::shared_ptr<bcos::boostssl::MessageFace> message) {
                 boost::ignore_unused(session);
                 // network error
@@ -205,7 +205,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                         << LOG_KV("errorMessage", e.what())
                         << LOG_KV("timeCost", (utcTime() - startT));
                     // try again
-                    self->trySendMessage();
+                    // self->trySendMessage();
                     return;
                 }
 
@@ -222,17 +222,17 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                             << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
                             << LOG_KV("errorCode", respCode) << LOG_KV("errorMessage", e.what());
                         // try again
-                        self->trySendMessage();
+                        // self->trySendMessage();
                         return;
                     }
                     GATEWAY_LOG(TRACE)
                         << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
                         << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                        << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
+                        << LOG_KV("dstNodeID", dstNodeID->hex());
                     // send message successfully
-                    if (self->m_respFunc)
+                    if (respFunc)
                     {
-                        self->m_respFunc(nullptr);
+                        respFunc(nullptr);
                     }
                     return;
                 }
@@ -249,7 +249,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                                              "unknown")
                         << LOG_KV("size", p2pmessage->length()) << LOG_KV("error", e.what());
 
-                    self->trySendMessage();
+                    // self->trySendMessage();
                 }
             };
 
