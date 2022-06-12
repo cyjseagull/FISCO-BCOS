@@ -27,6 +27,8 @@ Service::Service(std::string const& _nodeID, std::shared_ptr<boostssl::ws::WsSer
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
 
+    m_reporter = std::make_shared<Timer>(1000, "netReporter");
+    m_reporter->registerTimeoutHandler([this]() { reportConnectedNodes(); });
     // Process handshake packet logic, handshake protocol and determine
     // the version, when handshake finished the version field of P2PMessage
     // should be set
@@ -40,6 +42,7 @@ Service::Service(std::string const& _nodeID, std::shared_ptr<boostssl::ws::WsSer
 
 void Service::reportConnectedNodes()
 {
+    m_reporter->restart();
     WsSessions sessions;
     {
         RecursiveGuard l(x_sessions);
@@ -51,25 +54,15 @@ void Service::reportConnectedNodes()
             }
         }
     }
-
     SERVICE_LOG(INFO) << LOG_DESC("connected nodes") << LOG_KV("count", sessions.size());
-
-    // auto ioc = std::make_shared<boost::asio::io_context>(16);
-    m_heartbeat = std::make_shared<boost::asio::deadline_timer>(
-        boost::asio::make_strand(*m_wsService->ioc()), boost::posix_time::milliseconds(10000));
-    auto self = std::weak_ptr<Service>(shared_from_this());
-    m_heartbeat->async_wait([self](const boost::system::error_code&) {
-        auto p2pservice = self.lock();
-        if (!p2pservice)
-        {
-            return;
-        }
-        p2pservice->reportConnectedNodes();
-    });
 }
 
 void Service::start()
 {
+    if (m_reporter)
+    {
+        m_reporter->start();
+    }
     if (!m_run)
     {
         m_run = true;
@@ -83,14 +76,16 @@ void Service::start()
             }
         });
         m_wsService->start();
-
-        // todo: to be removed;
         reportConnectedNodes();
     }
 }
 
 void Service::stop()
 {
+    if (m_reporter)
+    {
+        m_reporter->stop();
+    }
     if (m_run)
     {
         m_run = false;

@@ -225,8 +225,7 @@ protected:
     bcos::protocol::ProtocolInfoCodec::ConstPtr m_codec;
     P2pInfo m_p2pInfo;
 
-    // todo: add for test, to be removed
-    std::shared_ptr<boost::asio::deadline_timer> m_heartbeat;
+    std::shared_ptr<bcos::Timer> m_reporter;
 
     // handlers called when new-session
     std::vector<std::function<void(P2PSession::Ptr)>> m_newSessionHandlers;

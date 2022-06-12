@@ -225,10 +225,10 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                         // self->trySendMessage();
                         return;
                     }
-                    GATEWAY_LOG(TRACE)
-                        << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
-                        << LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                        << LOG_KV("dstNodeID", dstNodeID->hex());
+                    GATEWAY_LOG(TRACE) << LOG_BADGE("Retry: asyncSendMessageByNodeID success")
+                                       //<< LOG_KV("dstP2P", p2pID) << LOG_KV("srcNodeID",
+                                       //self->m_srcNodeID->hex())
+                                       << LOG_KV("dstNodeID", dstNodeID->hex());
                     // send message successfully
                     if (respFunc)
                     {
