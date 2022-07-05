@@ -28,9 +28,9 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(
-    TxPoolConfig::Ptr _config, size_t _notifyWorkerNum, int64_t _txsExpirationTime)
-  : m_config(_config), m_txsExpirationTime(_txsExpirationTime)
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum,
+    int64_t _txsExpirationTime, bool _preStoreTxs)
+  : m_config(_config), m_txsExpirationTime(_txsExpirationTime), m_preStoreTxs(_preStoreTxs)
 {
     m_notifier = std::make_shared<ThreadPool>("txNotifier", _notifyWorkerNum);
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
@@ -248,7 +248,10 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
-    preCommitTransaction(_tx);
+    if (m_preStoreTxs)
+    {
+        preCommitTransaction(_tx);
+    }
     notifyUnsealedTxsSize();
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
@@ -563,7 +566,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             continue;
         }
         // only seal the txs have been stored to the backend
-        if (!tx->storeToBackend())
+        if (m_preStoreTxs && !tx->storeToBackend())
         {
             continue;
         }

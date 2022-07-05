@@ -156,10 +156,12 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     m_ledger = ledger;
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
+    bool preStoreTxs = true;
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         executionMessageFactory =
             std::make_shared<bcostars::protocol::ExecutionMessageFactoryImpl>();
+        preStoreTxs = false;
     }
     else
     {
@@ -171,8 +173,8 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto transactionSubmitResultFactory = std::make_shared<TransactionSubmitResultFactoryImpl>();
 
     // init the txpool
-    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
-        m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
+    m_txpoolInitializer = std::make_shared<TxPoolInitializer>(m_nodeConfig, m_protocolInitializer,
+        m_frontServiceInitializer->front(), ledger, preStoreTxs);
 
     auto factory = SchedulerInitializer::buildFactory(executorManager, ledger, schedulerStorage,
         executionMessageFactory, m_protocolInitializer->blockFactory(),
