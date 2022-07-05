@@ -171,6 +171,15 @@ void BlockExecutive::buildExecutivesFromMetaData()
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
         {
             auto metaData = m_block->transactionMetaData(i);
+            if (!m_isSysBlock)
+            {
+                auto toAddress = metaData->to();
+                if (bcos::precompiled::c_systemTxsAddress.count(
+                        std::string(toAddress.begin(), toAddress.end())))
+                {
+                    m_isSysBlock.store(true);
+                }
+            }
             if (metaData)
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
