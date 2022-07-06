@@ -370,7 +370,7 @@ void TiKVStorage::asyncCommit(
 {
     auto start = utcTime();
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncCommit") << LOG_KV("blockNumber", params.number)
-                            << LOG_KV("primary", params.timestamp > 0 ? "true" : "false");
+                            << LOG_KV("primary", params.timestamp > 0 ? "false" : "true");
     try
     {
         uint64_t ts = 0;
