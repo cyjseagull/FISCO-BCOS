@@ -55,12 +55,21 @@ macro(configure_project)
 
     #ARCH TYPE
     default_option(NATIVE OFF)
+    option(USE_LD_GOLD "Use GNU gold linker" ON)
     if ("${ARCHITECTURE}" MATCHES "aarch64" OR "${ARCHITECTURE}" MATCHES "arm64")
         default_option(NATIVE ON)
+        option(USE_LD_GOLD "Use GNU gold linker" OFF)
     endif()
     if(NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
+    if (USE_LD_GOLD)
+        execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
+        if ("${LD_VERSION}" MATCHES "GNU gold")
+            set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=gold")
+            set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
+        endif ()
+    endif ()
     #SANITIZE
     default_option(SANITIZE OFF)
 
