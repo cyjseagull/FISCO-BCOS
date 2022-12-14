@@ -41,6 +41,7 @@
 #include "../precompiled/extension/AccountManagerPrecompiled.h"
 #include "../precompiled/extension/AccountPrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/CipherMatchPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../precompiled/extension/GroupSigPrecompiled.h"
@@ -227,6 +228,9 @@ void TransactionExecutor::initEvmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_ADDRESS, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+    // create cipher-match precompiled
+    m_constantPrecompiled->insert({CIPHER_MATCH_ADDRESS,
+        std::make_shared<bcos::precompiled::CipherMatchPrecompiled>(m_hashImpl)});
 }
 
 void TransactionExecutor::initWasmEnvironment()
@@ -273,6 +277,9 @@ void TransactionExecutor::initWasmEnvironment()
     // create the zkp-precompiled
     m_constantPrecompiled->insert(
         {DISCRETE_ZKP_NAME, std::make_shared<bcos::precompiled::ZkpPrecompiled>(m_hashImpl)});
+    // create cipher-match precompiled
+    m_constantPrecompiled->insert({CIPHER_MATCH_NAME,
+        std::make_shared<bcos::precompiled::CipherMatchPrecompiled>(m_hashImpl)});
 }
 
 void TransactionExecutor::initTestPrecompiled(storage::StorageInterface::Ptr storage)
@@ -2523,16 +2530,18 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     if (!m_isWasm)
     {
-        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
-        {
-            callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
-        }
-        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
-        {
-            callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
-        }
+        if (callParameters->codeAddress.size() < addressSize)
+            [[unlikely]]
+            {
+                callParameters->codeAddress.insert(
+                    0, callParameters->codeAddress.size() - addressSize, '0');
+            }
+        if (callParameters->receiveAddress.size() < addressSize)
+            [[unlikely]]
+            {
+                callParameters->receiveAddress.insert(
+                    0, callParameters->receiveAddress.size() - addressSize, '0');
+            }
     }
 
     return callParameters;
@@ -2567,16 +2576,18 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     if (!m_isWasm)
     {
         constexpr static auto addressSize = Address::SIZE * 2;
-        if (callParameters->codeAddress.size() < addressSize) [[unlikely]]
-        {
-            callParameters->codeAddress.insert(
-                0, callParameters->codeAddress.size() - addressSize, '0');
-        }
-        if (callParameters->receiveAddress.size() < addressSize) [[unlikely]]
-        {
-            callParameters->receiveAddress.insert(
-                0, callParameters->receiveAddress.size() - addressSize, '0');
-        }
+        if (callParameters->codeAddress.size() < addressSize)
+            [[unlikely]]
+            {
+                callParameters->codeAddress.insert(
+                    0, callParameters->codeAddress.size() - addressSize, '0');
+            }
+        if (callParameters->receiveAddress.size() < addressSize)
+            [[unlikely]]
+            {
+                callParameters->receiveAddress.insert(
+                    0, callParameters->receiveAddress.size() - addressSize, '0');
+            }
     }
     return callParameters;
 }

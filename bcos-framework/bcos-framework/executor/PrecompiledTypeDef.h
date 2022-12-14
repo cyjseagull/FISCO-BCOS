@@ -45,12 +45,14 @@ constexpr const char* const BFS_NAME = "/sys/bfs";
 constexpr const char* const GROUP_SIG_NAME = "/sys/group_sig";
 constexpr const char* const RING_SIG_NAME = "/sys/ring_sig";
 constexpr const char* const DISCRETE_ZKP_NAME = "/sys/discrete_zkp";
+constexpr const char* const CIPHER_MATCH_NAME = "/sys/cipher_match";
+
 constexpr const char* const ACCOUNT_MANAGER_NAME = "/sys/account_manager";
-constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 13;
+constexpr static const uint8_t BFS_SYS_SUBS_COUNT = 14;
 constexpr static const std::array<std::string_view, BFS_SYS_SUBS_COUNT> BFS_SYS_SUBS = {
     SYS_CONFIG_NAME, TABLE_NAME, TABLE_MANAGER_NAME, CONSENSUS_NAME, AUTH_MANAGER_NAME,
     KV_TABLE_NAME, CRYPTO_NAME, DAG_TRANSFER_NAME, BFS_NAME, GROUP_SIG_NAME, RING_SIG_NAME,
-    DISCRETE_ZKP_NAME, ACCOUNT_MANAGER_NAME};
+    DISCRETE_ZKP_NAME, CIPHER_MATCH_NAME, ACCOUNT_MANAGER_NAME};
 
 /// precompiled contract for solidity
 /// precompiled address should range in [0x1000, 0x20000)
@@ -71,6 +73,8 @@ constexpr const char* const GROUP_SIG_ADDRESS = "0000000000000000000000000000000
 constexpr const char* const RING_SIG_ADDRESS = "0000000000000000000000000000000000005005";
 // for zkp
 constexpr const char* const DISCRETE_ZKP_ADDRESS = "0000000000000000000000000000000000005100";
+// for cipher_match
+constexpr const char* const CIPHER_MATCH_ADDRESS = "0000000000000000000000000000000000005101";
 
 
 /// auth system contract for solidity
@@ -96,6 +100,7 @@ constexpr static const std::array<std::pair<std::string_view,std::string_view>, 
     {GROUP_SIG_NAME, GROUP_SIG_ADDRESS},
     {RING_SIG_NAME, RING_SIG_ADDRESS},
     {DISCRETE_ZKP_NAME, DISCRETE_ZKP_ADDRESS},
+    {CIPHER_MATCH_NAME, CIPHER_MATCH_ADDRESS},
     {ACCOUNT_MANAGER_NAME, ACCOUNT_MGR_ADDRESS}
 };
 // clang-format on

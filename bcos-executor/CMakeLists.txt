@@ -18,8 +18,8 @@ find_package(jsoncpp REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos bcos-protocol
-    Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig)
+
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} wedprcrypto::fisco-bcos wedprcrypto::equality bcos-protocol Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig)
 
 # TODO: EXTEND_LIB not support now!
 
