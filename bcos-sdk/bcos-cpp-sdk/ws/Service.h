@@ -153,6 +153,7 @@ public:
         return maxVersion << 16 | minVersion;
     }
 
+
 private:
     uint32_t m_wsHandshakeTimeout = 10000;  // 10s
     std::atomic<uint32_t> m_handshakeSucCount = 0;

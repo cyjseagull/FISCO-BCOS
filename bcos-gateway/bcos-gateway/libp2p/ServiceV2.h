@@ -27,7 +27,7 @@ class ServiceV2 : public Service
 {
 public:
     using Ptr = std::shared_ptr<ServiceV2>;
-    ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
+    ServiceV2(P2PInfo const& _nodeID, RouterTableFactory::Ptr _routerTableFactory);
     ServiceV2() = delete;
     ServiceV2(const ServiceV2&) = delete;
     ServiceV2(ServiceV2&&) = delete;
@@ -57,6 +57,10 @@ public:
 
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
+
+    // for compatibility consideration, clear the router table after protocolNegotiate success
+    bool onReceiveProtocol(NetworkException _error, std::shared_ptr<P2PSession> _session,
+        P2PMessage::Ptr _message) override;
 
 protected:
     // called when the nodes become unreachable
@@ -97,6 +101,18 @@ protected:
 
     virtual void asyncBroadcastMessageWithoutForward(
         std::shared_ptr<P2PMessage> message, Options options);
+
+    void assignSrcNodeID(uint64_t nodeIDLen, P2PMessage& message)
+    {
+        if (m_selfInfo.p2pID.size() <= nodeIDLen)
+        {
+            message.setSrcP2PNodeID(m_selfInfo.p2pID);
+        }
+        else
+        {
+            message.setSrcP2PNodeID(m_selfInfo.rawP2pID);
+        }
+    }
 
 private:
     // for message forward

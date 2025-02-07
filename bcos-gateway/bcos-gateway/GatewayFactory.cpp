@@ -597,14 +597,15 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
 {
     auto nodeCert =
         (_config->smSSL() ? _config->smCertConfig().nodeCert : _config->certConfig().nodeCert);
-    std::string rawPubKey;
-    if (!nodeCert || !m_certPubHexHandler(*nodeCert, rawPubKey))
+    P2PInfo selfNodeInfo;
+    if (!nodeCert || !m_certPubHexHandler(*nodeCert, selfNodeInfo.rawP2pID))
     {
         BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
                                   "GatewayFactory::init unable parse myself pub id"));
     }
 
-    auto pubHex = _config->calculateShortNodeID(rawPubKey);
+    selfNodeInfo.p2pID = _config->calculateShortNodeID(selfNodeInfo.rawP2pID);
+
     std::shared_ptr<ba::ssl::context> srvCtx =
         (_config->smSSL() ?
                 buildSSLContext(true, _config->sslServerMode(), _config->smCertConfig()) :
@@ -626,9 +627,9 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     // Message Factory
     auto messageFactory = std::make_shared<P2PMessageFactoryV2>();
     // Session Factory
-    auto sessionFactory = std::make_shared<SessionFactory>(pubHex, _config->sessionRecvBufferSize(),
-        _config->allowMaxMsgSize(), _config->maxReadDataSize(), _config->maxSendDataSize(),
-        _config->maxMsgCountSendOneTime(), _config->enableCompress());
+    auto sessionFactory = std::make_shared<SessionFactory>(selfNodeInfo,
+        _config->sessionRecvBufferSize(), _config->allowMaxMsgSize(), _config->maxReadDataSize(),
+        _config->maxSendDataSize(), _config->maxMsgCountSendOneTime(), _config->enableCompress());
     // KeyFactory
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     // Session Callback manager
@@ -657,11 +658,11 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     if (enableRIPProtocol)
     {
         auto routerTableFactory = std::make_shared<RouterTableFactoryImpl>();
-        service = std::make_shared<ServiceV2>(pubHex, routerTableFactory);
+        service = std::make_shared<ServiceV2>(selfNodeInfo, routerTableFactory);
     }
     else
     {
-        service = std::make_shared<Service>(pubHex);
+        service = std::make_shared<Service>(selfNodeInfo);
     }
 
     service->setHost(host);
@@ -677,7 +678,7 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("enable compress", _config->enableCompress())
-                              << LOG_KV("myself pub id", printShortHex(pubHex));
+                              << LOG_KV("myself pub id", printShortHex(selfNodeInfo.p2pID));
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;

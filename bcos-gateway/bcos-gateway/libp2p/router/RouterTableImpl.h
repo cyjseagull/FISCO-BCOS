@@ -76,9 +76,16 @@ public:
     void encode(bcos::bytes& _encodedData) override;
     void decode(bcos::bytesConstRef _decodedData) override;
 
-    std::map<std::string, RouterTableEntryInterface::Ptr> const& routerEntries() override
+    std::map<std::string, RouterTableEntryInterface::Ptr> routerEntries() const override
     {
+        bcos::ReadGuard l(x_routerEntries);
         return m_routerEntries;
+    }
+
+    uint32_t routerEntrySize() const override
+    {
+        bcos::ReadGuard l(x_routerEntries);
+        return m_routerEntries.size();
     }
     // append the unreachableNodes into param _unreachableNodes
     bool update(std::set<std::string>& _unreachableNodes, std::string const& _generatedFrom,
@@ -86,8 +93,8 @@ public:
     // append the unreachableNodes into param _unreachableNodes
     bool erase(std::set<std::string>& _unreachableNodes, std::string const& _p2pNodeID) override;
 
-    void setNodeID(std::string const& _nodeID) override { m_nodeID = _nodeID; }
-    std::string const& nodeID() const override { return m_nodeID; }
+    void setNodeInfo(P2PInfo const& _p2pInfo) override { m_selfInfo = _p2pInfo; }
+    std::string const& nodeID() const override { return m_selfInfo.p2pID; }
 
     void setUnreachableDistance(int _unreachableDistance) override
     {
@@ -102,8 +109,17 @@ public:
     void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
         std::string const& _nextHop, int32_t _newDistance);
 
+    // update the nodeID
+    void updateNodeID(std::string const& oldNodeID, std::string const& newNodeID) override;
+
 private:
-    std::string m_nodeID;
+    bool nodeSelf(std::string const& p2pID)
+    {
+        return p2pID == m_selfInfo.p2pID || p2pID == m_selfInfo.rawP2pID;
+    }
+
+private:
+    P2PInfo m_selfInfo;
     std::function<bcostars::RouterTable*()> m_inner;
     std::map<std::string, RouterTableEntryInterface::Ptr> m_routerEntries;
     mutable SharedMutex x_routerEntries;

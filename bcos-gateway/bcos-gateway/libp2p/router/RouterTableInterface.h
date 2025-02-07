@@ -67,9 +67,10 @@ public:
         RouterTableEntryInterface::Ptr _entry) = 0;
     virtual bool erase(std::set<std::string>& _unreachableNodes, std::string const& _p2pNodeID) = 0;
 
-    virtual std::map<std::string, RouterTableEntryInterface::Ptr> const& routerEntries() = 0;
-
-    virtual void setNodeID(std::string const& _nodeID) = 0;
+    virtual std::map<std::string, RouterTableEntryInterface::Ptr> routerEntries() const = 0;
+    // Note: routerEntrySize is more efficient than routerEntries().size()
+    virtual uint32_t routerEntrySize() const = 0;
+    virtual void setNodeInfo(P2PInfo const& _nodeInfo) = 0;
     virtual std::string const& nodeID() const = 0;
     virtual void setUnreachableDistance(int _unreachableDistance) = 0;
     virtual std::string getNextHop(std::string const& _nodeID) = 0;
@@ -77,6 +78,7 @@ public:
 
     virtual void encode(bcos::bytes& _encodedData) = 0;
     virtual void decode(bcos::bytesConstRef _decodedData) = 0;
+    virtual void updateNodeID(std::string const& oldNodeID, std::string const& newNodeID) = 0;
 };
 
 class RouterTableFactory

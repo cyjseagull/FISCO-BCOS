@@ -101,6 +101,11 @@ struct P2PInfo
 {
     using Ptr = std::shared_ptr<P2PInfo>;
     P2PInfo() = default;
+    P2PInfo(std::string const& _p2pID)
+    {
+        p2pID = _p2pID;
+        rawP2pID = _p2pID;
+    }
     ~P2PInfo() noexcept = default;
     // the raw-p2p-nodeID
     std::string rawP2pID;
@@ -110,6 +115,23 @@ struct P2PInfo
     std::string agencyName;
     std::string nodeName;
     NodeIPEndpoint nodeIPEndpoint;
+
+    // Note: Please change carefully here
+    bool operator<(const P2PInfo& rhs) const
+    {
+        // high priority(the case received nodeID from  new node)
+        if (rhs.p2pID.size() == p2pID.size())
+        {
+            return p2pID < rhs.p2pID;
+        }
+        // the case receive nodeID from old node
+        return rawP2pID < rhs.rawP2pID;
+    }
+
+    bool operator==(const P2PInfo& rhs) const
+    {
+        return (p2pID == rhs.p2pID || rawP2pID == rhs.rawP2pID);
+    }
 };
 using P2PInfos = std::vector<P2PInfo>;
 

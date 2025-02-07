@@ -23,7 +23,7 @@ using namespace bcos::protocol;
 
 static const uint32_t CHECK_INTERVAL = 10000;
 
-Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
+Service::Service(P2PInfo const& _nodeInfo) : m_selfInfo(_nodeInfo)
 {
     m_msgHandlers.fill(nullptr);
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
@@ -41,6 +41,9 @@ Service::Service(std::string const& _nodeID) : m_nodeID(_nodeID)
     registerHandlerByMsgType(GatewayMessageType::Handshake,
         boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
+    registerHandlerByMsgType(GatewayMessageType::Handshake,
+        [this](NetworkException _error, std::shared_ptr<P2PSession> _session,
+            P2PMessage::Ptr _message) { onReceiveProtocol(_error, _session, _message); });
 
     registerHandlerByMsgType(GatewayMessageType::Heartbeat,
         boost::bind(&Service::onReceiveHeartbeat, this, boost::placeholders::_1,
@@ -128,7 +131,7 @@ void Service::heartBeat()
 
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
                       << LOG_KV("connected count", m_sessions.size());
-    for (auto& [p2pID, session] : m_sessions)
+    for (auto& [p2pNodeInfo, session] : m_sessions)
     {
         auto queueSize = session->session()->writeQueueSize();
         if (queueSize > 0)
@@ -229,9 +232,8 @@ void Service::onConnect(
     p2pSession->session()->setBeforeMessageHandler([this](SessionFace& session, Message& message) {
         return onBeforeMessage(session, message);
     });
-
-    decltype(m_sessions)::accessor accessor;
-    if (m_sessions.find(accessor, p2pID) && accessor->second->active())
+    auto accessor = m_sessions.find(p2pInfo);
+    if (accessor != m_sessions.end() && accessor->second->active())
     {
         SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortHex(p2pID));
         updateStaticNodes(session->socket(), p2pID);
@@ -241,14 +243,13 @@ void Service::onConnect(
     p2pSession->start();
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
-    if (!accessor.empty())
+    if (accessor != m_sessions.end())
     {
         accessor->second = p2pSession;
     }
     else
     {
-        m_sessions.insert(std::make_pair(p2pID, p2pSession));
-        accessor.release();
+        m_sessions.emplace(p2pInfo, p2pSession);
         callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", printShortHex(p2pID))
@@ -262,15 +263,15 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     {
         handler(e, p2pSession);
     }
-
-    if (decltype(m_sessions)::const_accessor accessor;
-        m_sessions.find(accessor, p2pSession->p2pID()) && accessor->second == p2pSession)
+    auto accessor = m_sessions.find(P2PInfo(p2pSession->p2pID()));
+    if (accessor != m_sessions.end() && accessor->second == p2pSession)
     {
         SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
                            << LOG_KV("p2pid", p2pSession->shortP2pID())
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
-        m_sessions.erase(accessor);
+
+        m_sessions.unsafe_erase(accessor);
         callDeleteSessionHandlers(p2pSession);
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
@@ -516,8 +517,8 @@ void Service::asyncSendMessageByNodeID(
         }
 
         P2PSession::Ptr session;
-        if (decltype(m_sessions)::const_accessor accessor;
-            m_sessions.find(accessor, nodeID) && accessor->second->active())
+        auto accessor = m_sessions.find(P2PInfo(nodeID));
+        if (accessor != m_sessions.end() && accessor->second->active())
         {
             session = accessor->second;
         }
@@ -560,7 +561,8 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
     {
         for (auto& session : m_sessions)
         {
-            asyncSendMessageByNodeID(session.first, message, {}, options);
+            // TODO: determine by version
+            asyncSendMessageByNodeID(session.second->p2pID(), message, {}, options);
         }
     }
     catch (std::exception& e)
@@ -590,8 +592,8 @@ P2PInfos Service::sessionInfos()
 
 bool Service::isConnected(P2pID const& nodeID) const
 {
-    if (decltype(m_sessions)::const_accessor accessor;
-        m_sessions.find(accessor, nodeID) && accessor->second->active())
+    auto accessor = m_sessions.find(P2PInfo(nodeID));
+    if (accessor != m_sessions.end() && accessor->second->active())
     {
         return true;
     }
@@ -702,7 +704,7 @@ void Service::Service::onReceiveHeartbeat(
 }
 
 // receive the protocolInfo
-void Service::onReceiveProtocol(
+bool Service::onReceiveProtocol(
     NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
 {
     if (_error.errorCode())
@@ -710,7 +712,7 @@ void Service::onReceiveProtocol(
         SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol failed")
                              << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what())
                              << LOG_KV("peer", _session ? _session->shortP2pID() : "unknown");
-        return;
+        return false;
     }
     try
     {
@@ -728,7 +730,7 @@ void Service::onReceiveProtocol(
                 << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
                 << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion());
             _session->session()->disconnect(DisconnectReason::NegotiateFailed);
-            return;
+            return false;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
         protocolInfo->setVersion(version);
@@ -740,6 +742,7 @@ void Service::onReceiveProtocol(
                           << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
                           << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
                           << LOG_KV("negotiatedVersion", version);
+        return true;
     }
     catch (std::exception const& e)
     {
@@ -747,6 +750,7 @@ void Service::onReceiveProtocol(
                              << LOG_KV("peer", _session ? _session->shortP2pID() : "unknown")
                              << LOG_KV("packetType", _message->packetType())
                              << LOG_KV("seq", _message->seq());
+        return false;
     }
 }
 
@@ -808,7 +812,8 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
     }
 
     P2PSession::Ptr session;
-    if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, nodeID))
+    auto accessor = m_sessions.find(P2PInfo(nodeID));
+    if (accessor != m_sessions.end())
     {
         session = accessor->second;
     }

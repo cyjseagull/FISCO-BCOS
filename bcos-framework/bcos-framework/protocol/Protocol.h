@@ -104,7 +104,8 @@ enum ProtocolVersion : uint32_t
 {
     V0 = 0,
     V1 = 1,
-    V2 = 2,
+    V2 = 2,  // upgrade for gateway, extend p2pMessage with srcP2PNodeID and dstP2PNodeID
+    V3 = 3,  // upgrade for gateway, optimize the nodeID, from 1024 bytes to 32 bytes
 };
 
 // BlockVersion only present the data version with format major.minor.patch of 3 bytes, data should

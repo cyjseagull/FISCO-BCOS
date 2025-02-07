@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <bcos-framework/protocol/Protocol.h>
 #include <bcos-framework/protocol/ProtocolInfo.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
@@ -36,8 +37,16 @@ public:
     virtual SessionFace::Ptr session() { return m_session; }
     virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
 
-    virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
-    virtual std::string_view shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
+    virtual P2pID p2pID()
+    {
+        //  the old node case
+        if (!m_protocolInfo || m_protocolInfo->version() < bcos::protocol::ProtocolVersion::V3)
+        {
+            return m_p2pInfo->rawP2pID;
+        }
+        return m_p2pInfo->p2pID;
+    }
+    virtual std::string shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {

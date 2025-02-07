@@ -621,7 +621,8 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             }
             // TODO: move the logic to Service for deal with the forwarding message
             if (!message->dstP2PNodeID().empty() &&
-                message->dstP2PNodeID() != session->m_hostNodeID)
+                message->dstP2PNodeID() != session->m_hostNodeInfo.p2pID &&
+                message->dstP2PNodeID() != session->m_hostNodeInfo.rawP2pID)
             {
                 session->m_messageHandler(e, session, message);
                 return;

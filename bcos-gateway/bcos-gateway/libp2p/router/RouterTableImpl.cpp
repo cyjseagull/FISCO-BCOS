@@ -83,6 +83,7 @@ bool RouterTable::erase(std::set<std::string>& _unreachableNodes, std::string co
     return updated;
 }
 
+// Note: the caller (namely erase) already owner a write lock
 void RouterTable::updateDistanceForAllRouterEntries(
     std::set<std::string>& _unreachableNodes, std::string const& _nextHop, int32_t _newDistance)
 {
@@ -156,7 +157,7 @@ bool RouterTable::updateDstNodeEntry(
 {
     UpgradableGuard upgradableGuard(x_routerEntries);
     // the node self
-    if (_entry->dstNode() == m_nodeID)
+    if (nodeSelf(_entry->dstNode()))
     {
         return false;
     }
@@ -166,7 +167,7 @@ bool RouterTable::updateDstNodeEntry(
     {
         UpgradeGuard upgradeGuard(upgradableGuard);
         _entry->incDistance(1);
-        if (_generatedFrom != m_nodeID)
+        if (!nodeSelf(_generatedFrom))
         {
             _entry->setNextHop(_generatedFrom);
         }
@@ -187,7 +188,7 @@ bool RouterTable::updateDstNodeEntry(
     if (currentDistance > distance)
     {
         UpgradeGuard upgradeGuard(upgradableGuard);
-        if (_generatedFrom != m_nodeID)
+        if (!nodeSelf(_generatedFrom))
         {
             currentEntry->setNextHop(_generatedFrom);
         }
@@ -272,4 +273,35 @@ std::set<std::string> RouterTable::getAllReachableNode()
     }
 
     return reachableNodes;
+}
+
+void RouterTable::updateNodeID(std::string const& oldNodeID, std::string const& newNodeID)
+{
+    if (newNodeID == oldNodeID)
+    {
+        return;
+    }
+    SERVICE_ROUTER_LOG(INFO) << LOG_DESC("updateNodeID") << LOG_KV("old", oldNodeID)
+                             << LOG_KV("new", newNodeID);
+    RouterTableEntryInterface::Ptr existedEntry;
+    {
+        bcos::WriteGuard l(x_routerEntries);
+        auto it = m_routerEntries.find(oldNodeID);
+        if (it != m_routerEntries.end())
+        {
+            existedEntry = it->second;
+            m_routerEntries.erase(it);
+            // update the dstNodeID
+            m_routerEntries.insert(std::make_pair(newNodeID, existedEntry));
+        }
+    }
+    // update corresponding the nextHop to newNodeID for all entries
+    bcos::ReadGuard l(x_routerEntries);
+    for (auto const& it : m_routerEntries)
+    {
+        if (it.second && it.second->nextHop() == oldNodeID)
+        {
+            it.second->setNextHop(newNodeID);
+        }
+    }
 }

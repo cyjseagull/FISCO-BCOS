@@ -15,7 +15,7 @@
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-#include <oneapi/tbb/concurrent_hash_map.h>
+#include <oneapi/tbb/concurrent_map.h>
 #include <array>
 
 
@@ -28,7 +28,7 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service(std::string const& _nodeID);
+    Service(P2PInfo const& _nodeInfo);
     virtual ~Service() override { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -38,7 +38,7 @@ public:
     virtual void heartBeat();
 
     virtual bool active() { return m_run; }
-    P2pID id() const override { return m_nodeID; }
+    P2pID id() const override { return m_selfInfo.p2pID; }
 
     virtual void onConnect(
         NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session);
@@ -83,7 +83,7 @@ public:
     P2PInfo localP2pInfo() override
     {
         auto p2pInfo = m_host->p2pInfo();
-        p2pInfo.p2pID = m_nodeID;
+        p2pInfo.p2pID = id();
         return p2pInfo;
     }
     bool isConnected(P2pID const& nodeID) const override;
@@ -113,7 +113,8 @@ public:
 
     std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
     {
-        if (decltype(m_sessions)::const_accessor accessor; m_sessions.find(accessor, _nodeID))
+        auto accessor = m_sessions.find(P2PInfo(_nodeID));
+        if (accessor != m_sessions.end())
         {
             return accessor->second;
         }
@@ -169,7 +170,7 @@ protected:
     std::shared_ptr<P2PMessage> newP2PMessage(uint16_t _type, bytesConstRef _payload);
     // handshake protocol
     void asyncSendProtocol(P2PSession::Ptr _session);
-    void onReceiveProtocol(
+    virtual bool onReceiveProtocol(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     void onReceiveHeartbeat(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
@@ -228,11 +229,12 @@ private:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_sessions;
+    using SessionsType = tbb::concurrent_map<P2PInfo, P2PSession::Ptr>;
+    SessionsType m_sessions;
     // tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_seesions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 
-    P2pID m_nodeID;
+    P2PInfo m_selfInfo;
     std::optional<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
 

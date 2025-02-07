@@ -27,12 +27,12 @@
 using namespace bcos;
 using namespace bcos::gateway;
 
-ServiceV2::ServiceV2(std::string const& _nodeID, RouterTableFactory::Ptr _routerTableFactory)
-  : Service(_nodeID),
+ServiceV2::ServiceV2(P2PInfo const& _nodeInfo, RouterTableFactory::Ptr _routerTableFactory)
+  : Service(_nodeInfo),
     m_routerTableFactory(std::move(_routerTableFactory)),
     m_routerTable(m_routerTableFactory->createRouterTable())
 {
-    m_routerTable->setNodeID(m_nodeID);
+    m_routerTable->setNodeInfo(m_selfInfo);
     m_routerTable->setUnreachableDistance(c_unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
@@ -70,6 +70,27 @@ void ServiceV2::stop()
     Service::stop();
 }
 
+// for compatibility consideration, clear the router table after protocolNegotiate success
+bool ServiceV2::onReceiveProtocol(
+    NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    auto ret = Service::onReceiveProtocol(_error, _session, _message);
+    if (!ret)
+    {
+        return ret;
+    }
+    SERVICE2_LOG(INFO) << LOG_DESC("onReceiveProtocol success, clear router table to rebuild");
+    // try to refresh the router status
+    m_routerTable->updateNodeID(_session->p2pInfo().rawP2pID, _session->p2pInfo().p2pID);
+    m_routerTable->updateNodeID(_session->p2pInfo().p2pID, _session->p2pInfo().p2pID);
+    // remove since the p2pID maybe changed
+    std::set<std::string> unreachableNodes;
+    unreachableNodes.insert(_session->p2pInfo().rawP2pID);
+    unreachableNodes.insert(_session->p2pInfo().p2pID);
+    onP2PNodesUnreachable(unreachableNodes);
+
+    return true;
+}
 // receive routerTable from peers
 void ServiceV2::onReceivePeersRouterTable(
     NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
@@ -84,7 +105,7 @@ void ServiceV2::onReceivePeersRouterTable(
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->shortP2pID())
-                       << LOG_KV("entrySize", routerTable->routerEntries().size());
+                       << LOG_KV("entrySize", routerTable->routerEntrySize());
     joinRouterTable(_session->p2pID(), routerTable);
 }
 
@@ -109,7 +130,11 @@ void ServiceV2::joinRouterTable(
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_generatedFrom);
     entry->setDistance(0);
-    if (m_routerTable->update(unreachableNodes, m_nodeID, entry) && !updated)
+    if (m_routerTable->update(unreachableNodes, m_selfInfo.p2pID, entry) && !updated)
+    {
+        updated = true;
+    }
+    if (m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry) && !updated)
     {
         updated = true;
     }
@@ -136,7 +161,7 @@ void ServiceV2::onReceiveRouterTableRequest(
     }
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceiveRouterTableRequest")
                        << LOG_KV("peer", _session->shortP2pID())
-                       << LOG_KV("entrySize", m_routerTable->routerEntries().size());
+                       << LOG_KV("entrySize", m_routerTable->routerEntrySize());
 
     auto routerTableData = std::make_shared<bytes>();
     m_routerTable->encode(*routerTableData);
@@ -190,7 +215,13 @@ void ServiceV2::onNewSession(P2PSession::Ptr _session)
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_session->p2pID());
     entry->setDistance(0);
-    if (!m_routerTable->update(unreachableNodes, m_nodeID, entry))
+    if (!m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry))
+    {
+        SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("routerTable not changed")
+                           << LOG_KV("dst", _session->shortP2pID());
+        return;
+    }
+    if (!m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry))
     {
         SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("routerTable not changed")
                            << LOG_KV("dst", _session->shortP2pID());
@@ -280,8 +311,8 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
 void ServiceV2::asyncSendMessageByNodeID(P2pID _nodeID, std::shared_ptr<P2PMessage> _message,
     CallbackFuncWithSession _callback, Options _options)
 {
-    _message->setSrcP2PNodeID(m_nodeID);
     _message->setDstP2PNodeID(_nodeID);
+    assignSrcNodeID(_nodeID.size(), *_message);
     asyncSendMessageByNodeIDWithMsgForward(_message, _callback, _options);
 }
 
@@ -298,7 +329,8 @@ void ServiceV2::onMessage(NetworkException _error, SessionFace::Ptr _session, Me
     }
     // v0 message or the dstP2PNodeID is the nodeSelf
     auto p2pMsg = std::dynamic_pointer_cast<P2PMessageV2>(_message);
-    if (p2pMsg->dstP2PNodeID().empty() || p2pMsg->dstP2PNodeID() == m_nodeID)
+    if (p2pMsg->dstP2PNodeID().empty() || p2pMsg->dstP2PNodeID() == m_selfInfo.p2pID ||
+        p2pMsg->dstP2PNodeID() == m_selfInfo.rawP2pID)
     {
         if (c_fileLogLevel <= TRACE) [[unlikely]]
         {
@@ -351,7 +383,7 @@ void ServiceV2::asyncBroadcastMessage(std::shared_ptr<P2PMessage> message, Optio
     {
         for (auto const& node : reachableNodes)
         {
-            message->setSrcP2PNodeID(m_nodeID);
+            assignSrcNodeID(node.size(), *message);
             message->setDstP2PNodeID(node);
             asyncSendMessageByNodeID(node, message, CallbackFuncWithSession(), options);
         }
@@ -372,6 +404,10 @@ void ServiceV2::asyncBroadcastMessageWithoutForward(
 
 bool ServiceV2::isReachable(P2pID const& _nodeID) const
 {
+    if (isConnected(_nodeID))
+    {
+        return true;
+    }
     auto reachableNodes = m_routerTable->getAllReachableNode();
     return reachableNodes.contains(_nodeID);
 }
@@ -388,7 +424,7 @@ void ServiceV2::sendRespMessageBySession(
     auto respMessage = std::dynamic_pointer_cast<P2PMessageV2>(messageFactory()->buildMessage());
     auto requestMsg = std::dynamic_pointer_cast<P2PMessageV2>(_p2pMessage);
     respMessage->setDstP2PNodeID(requestMsg->srcP2PNodeID());
-    respMessage->setSrcP2PNodeID(m_nodeID);
+    assignSrcNodeID(requestMsg->srcP2PNodeID().size(), *respMessage);
     respMessage->setSeq(requestMsg->seq());
     respMessage->setRespPacket();
     // TODO: reduce memory copy
@@ -412,7 +448,7 @@ void ServiceV2::sendRespMessageBySession(
 bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     P2pID nodeID, P2PMessage& message, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
-    message.setSrcP2PNodeID(m_nodeID);
+    assignSrcNodeID(nodeID.size(), message);
     message.setDstP2PNodeID(nodeID);
 
     auto dstNodeID = message.dstP2PNodeID();
