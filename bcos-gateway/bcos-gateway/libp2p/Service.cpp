@@ -110,7 +110,7 @@ void Service::heartBeat()
     for (auto& it : staticNodes)
     {
         /// exclude myself
-        if (it.second == id())
+        if (selfNode(it.second))
         {
             continue;
         }
@@ -208,10 +208,10 @@ void Service::onConnect(
     SERVICE_LOG(INFO) << LOG_DESC("onConnect") << LOG_KV("p2pid", printShortHex(p2pID))
                       << LOG_KV("endpoint", peer);
 
-    if (p2pID == id())
+    if (selfNode(p2pID))
     {
         SERVICE_LOG(TRACE) << "Disconnect self";
-        updateStaticNodes(session->socket(), id());
+        updateStaticNodes(session->socket(), rawID());
         session->disconnect(DuplicatePeer);
         return;
     }
@@ -236,13 +236,13 @@ void Service::onConnect(
     if (accessor != m_sessions.end() && accessor->second->active())
     {
         SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortHex(p2pID));
-        updateStaticNodes(session->socket(), p2pID);
+        updateStaticNodes(session->socket(), p2pInfo.rawP2pID);
         session->disconnect(DuplicatePeer);
         return;
     }
     p2pSession->start();
     asyncSendProtocol(p2pSession);
-    updateStaticNodes(session->socket(), p2pID);
+    updateStaticNodes(session->socket(), p2pInfo.rawP2pID);
     if (accessor != m_sessions.end())
     {
         accessor->second = p2pSession;
@@ -253,6 +253,7 @@ void Service::onConnect(
         callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", printShortHex(p2pID))
+                      << LOG_KV("rawP2pID", printShortHex(p2pInfo.rawP2pID))
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
@@ -268,6 +269,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     {
         SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
                            << LOG_KV("p2pid", p2pSession->shortP2pID())
+                           << LOG_KV("rawP2pID", p2pSession->printRawP2pID())
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
 
@@ -283,7 +285,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
         RecursiveGuard l(x_nodes);
         for (auto& it : m_staticNodes)
         {
-            if (it.second == p2pSession->p2pID())
+            if (it.second == p2pSession->p2pInfo().rawP2pID)
             {
                 it.second.clear();  // clear nodeid info when disconnect
                 break;
@@ -510,7 +512,7 @@ void Service::asyncSendMessageByNodeID(
 {
     try
     {
-        if (nodeID == id())
+        if (selfNode(nodeID))
         {
             // ignore myself
             return;
@@ -734,6 +736,7 @@ bool Service::onReceiveProtocol(
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
         protocolInfo->setVersion(version);
+        protocolInfo->setNegotiated(true);
         _session->setProtocolInfo(protocolInfo);
         SERVICE_LOG(INFO) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
                           << LOG_KV("peer", _session->shortP2pID())
@@ -772,7 +775,8 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
             SERVICE_LOG(INFO) << LOG_DESC("updatePeerBlacklist, disconnect peer in blacklist")
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
-            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            updateStaticNodes(
+                session.second->session()->socket(), session.second->p2pInfo().rawP2pID);
             session.second->session()->disconnect(DisconnectReason::InBlacklistReason);
         }
     }
@@ -796,7 +800,8 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
             SERVICE_LOG(INFO) << LOG_DESC("updatePeerWhitelist, disconnect peer not in whitelist")
                               << LOG_KV("peer", p2pIdWithoutExtInfo);
 
-            updateStaticNodes(session.second->session()->socket(), session.second->p2pID());
+            updateStaticNodes(
+                session.second->session()->socket(), session.second->p2pInfo().rawP2pID);
             session.second->session()->disconnect(DisconnectReason::NotInWhitelistReason);
         }
     }
@@ -805,7 +810,7 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
 bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
     P2pID nodeID, P2PMessage& header, ::ranges::any_view<bytesConstRef> payloads, Options options)
 {
-    if (nodeID == id())
+    if (selfNode(nodeID))
     {
         // ignore myself
         co_return {};

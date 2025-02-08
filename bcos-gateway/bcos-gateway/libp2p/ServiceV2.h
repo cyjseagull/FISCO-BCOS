@@ -20,6 +20,7 @@
 #pragma once
 #include "Service.h"
 #include "router/RouterTableInterface.h"
+#include <bcos-framework/protocol/Protocol.h>
 
 namespace bcos::gateway
 {
@@ -58,7 +59,7 @@ public:
     task::Task<Message::Ptr> sendMessageByNodeID(P2pID nodeID, P2PMessage& message,
         ::ranges::any_view<bytesConstRef> payloads, Options options = Options()) override;
 
-    // for compatibility consideration, clear the router table after protocolNegotiate success
+    // for compatibility consideration, resync the router table after protocolNegotiate success
     bool onReceiveProtocol(NetworkException _error, std::shared_ptr<P2PSession> _session,
         P2PMessage::Ptr _message) override;
 
@@ -84,7 +85,7 @@ protected:
     virtual void onReceivePeersRouterTable(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void joinRouterTable(
-        std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable);
+        RouterNodeID const& _generatedFrom, RouterTableInterface::Ptr _routerTable);
     virtual void onReceiveRouterTableRequest(
         NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
     virtual void broadcastRouterSeq();
@@ -102,19 +103,34 @@ protected:
     virtual void asyncBroadcastMessageWithoutForward(
         std::shared_ptr<P2PMessage> message, Options options);
 
-    void assignSrcNodeID(uint64_t nodeIDLen, P2PMessage& message)
+    void assignSrcNodeID(uint64_t expectedNodeIDLen, P2PMessage& message)
     {
-        if (m_selfInfo.p2pID.size() <= nodeIDLen)
+        // new node case
+        if (expectedNodeIDLen <= m_selfInfo.p2pID.size())
         {
             message.setSrcP2PNodeID(m_selfInfo.p2pID);
         }
         else
         {
+            // old node case
             message.setSrcP2PNodeID(m_selfInfo.rawP2pID);
         }
     }
 
+    RouterNodeID generateRouterNodeID(P2PSession::Ptr _session) const
+    {
+        // new node
+        if (_session->protocolInfo()->version() >= bcos::protocol::ProtocolVersion::V3)
+        {
+            return RouterNodeID(_session->p2pInfo().p2pID, _session->p2pInfo().rawP2pID);
+        }
+        // old node
+        return RouterNodeID(_session->p2pInfo().rawP2pID);
+    }
+
 private:
+    RouterNodeID m_selfRouterNodeInfo;
+
     // for message forward
     std::shared_ptr<bcos::Timer> m_routerTimer;
     std::atomic<uint32_t> m_statusSeq{1};

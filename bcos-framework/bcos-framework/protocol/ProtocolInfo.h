@@ -55,6 +55,8 @@ public:
 
     // the negotiated version
     virtual uint32_t version() const { return m_version; }
+    virtual bool negotiated() const { return m_negotiated; }
+    virtual void setNegotiated(bool _negotiated) { m_negotiated = _negotiated; }
 
 private:
     ProtocolModuleID m_protocolModuleID;
@@ -62,5 +64,6 @@ private:
     uint32_t m_minVersion;
     uint32_t m_maxVersion;
     uint32_t m_version;
+    bool m_negotiated = false;
 };
 }  // namespace bcos::protocol

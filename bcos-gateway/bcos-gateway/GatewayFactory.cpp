@@ -678,7 +678,8 @@ std::shared_ptr<Service> GatewayFactory::buildService(const GatewayConfig::Ptr& 
     GATEWAY_FACTORY_LOG(INFO) << LOG_BADGE("buildService") << LOG_DESC("build service end")
                               << LOG_KV("enable rip protocol", _config->enableRIPProtocol())
                               << LOG_KV("enable compress", _config->enableCompress())
-                              << LOG_KV("myself pub id", printShortHex(selfNodeInfo.p2pID));
+                              << LOG_KV("myself pub id", printShortHex(selfNodeInfo.p2pID))
+                              << LOG_KV("origin_pub_id", printShortHex(selfNodeInfo.rawP2pID));
     service->setMessageFactory(messageFactory);
     service->setKeyFactory(keyFactory);
     return service;
@@ -764,7 +765,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // register disconnect handler
         service->registerDisconnectHandler(
             [gatewayNodeManagerWeakPtr](NetworkException e, P2PSession::Ptr p2pSession) {
-                (void)e;
+                if (e.errorCode() == P2PExceptionType::DuplicateSession ||
+                    e.errorCode() == P2PExceptionType::Success)
+                {
+                    return;
+                }
                 auto gatewayNodeManager = gatewayNodeManagerWeakPtr.lock();
                 if (gatewayNodeManager && p2pSession)
                 {

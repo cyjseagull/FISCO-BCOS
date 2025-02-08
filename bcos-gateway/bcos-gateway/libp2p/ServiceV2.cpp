@@ -32,7 +32,10 @@ ServiceV2::ServiceV2(P2PInfo const& _nodeInfo, RouterTableFactory::Ptr _routerTa
     m_routerTableFactory(std::move(_routerTableFactory)),
     m_routerTable(m_routerTableFactory->createRouterTable())
 {
-    m_routerTable->setNodeInfo(m_selfInfo);
+    m_selfRouterNodeInfo.p2pID = m_selfInfo.p2pID;
+    m_selfRouterNodeInfo.rawP2pID = m_selfInfo.rawP2pID;
+
+    m_routerTable->setNodeInfo(m_selfRouterNodeInfo);
     m_routerTable->setUnreachableDistance(c_unreachableDistance);
     // process router packet related logic
     registerHandlerByMsgType(GatewayMessageType::RouterTableSyncSeq,
@@ -70,27 +73,23 @@ void ServiceV2::stop()
     Service::stop();
 }
 
-// for compatibility consideration, clear the router table after protocolNegotiate success
+// for compatibility consideration, resync the router table after protocolNegotiate success
 bool ServiceV2::onReceiveProtocol(
     NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
 {
     auto ret = Service::onReceiveProtocol(_error, _session, _message);
     if (!ret)
     {
-        return ret;
+        return false;
     }
-    SERVICE2_LOG(INFO) << LOG_DESC("onReceiveProtocol success, clear router table to rebuild");
-    // try to refresh the router status
-    m_routerTable->updateNodeID(_session->p2pInfo().rawP2pID, _session->p2pInfo().p2pID);
-    m_routerTable->updateNodeID(_session->p2pInfo().p2pID, _session->p2pInfo().p2pID);
-    // remove since the p2pID maybe changed
-    std::set<std::string> unreachableNodes;
-    unreachableNodes.insert(_session->p2pInfo().rawP2pID);
-    unreachableNodes.insert(_session->p2pInfo().p2pID);
-    onP2PNodesUnreachable(unreachableNodes);
-
+    SERVICE2_LOG(INFO)
+        << LOG_DESC("onReceiveProtocol success, try to sync the routerTableInformation again")
+        << LOG_KV("peer", _session->shortP2pID())
+        << LOG_KV("peerVersion", _session->protocolInfo()->version());
+    onNewSession(_session);
     return true;
 }
+
 // receive routerTable from peers
 void ServiceV2::onReceivePeersRouterTable(
     NetworkException _error, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
@@ -101,16 +100,24 @@ void ServiceV2::onReceivePeersRouterTable(
                               << LOG_KV("code", _error.errorCode()) << LOG_KV("msg", _error.what());
         return;
     }
+    if (!_session->negotiated())
+    {
+        SERVICE2_LOG(WARNING)
+            << LOG_BADGE(
+                   "onReceivePeersRouterTable return directly for the protocol not negotiated")
+            << LOG_KV("peer", _session->shortP2pID());
+    }
     auto routerTable = m_routerTableFactory->createRouterTable(_message->payload());
 
     SERVICE2_LOG(INFO) << LOG_BADGE("onReceivePeersRouterTable")
                        << LOG_KV("peer", _session->shortP2pID())
                        << LOG_KV("entrySize", routerTable->routerEntrySize());
-    joinRouterTable(_session->p2pID(), routerTable);
+
+    joinRouterTable(generateRouterNodeID(_session), routerTable);
 }
 
 void ServiceV2::joinRouterTable(
-    std::string const& _generatedFrom, RouterTableInterface::Ptr _routerTable)
+    RouterNodeID const& _generatedFrom, RouterTableInterface::Ptr _routerTable)
 {
     std::set<std::string> unreachableNodes;
     bool updated = false;
@@ -125,28 +132,26 @@ void ServiceV2::joinRouterTable(
     }
 
     SERVICE2_LOG(INFO) << LOG_BADGE("joinRouterTable") << LOG_DESC("create router entry")
-                       << LOG_KV("dst", printShortHex(_generatedFrom));
+                       << LOG_KV("dst", printShortHex(_generatedFrom.p2pID));
 
     auto entry = m_routerTableFactory->createRouterEntry();
     entry->setDstNode(_generatedFrom);
     entry->setDistance(0);
-    if (m_routerTable->update(unreachableNodes, m_selfInfo.p2pID, entry) && !updated)
-    {
-        updated = true;
-    }
-    if (m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry) && !updated)
+    if (m_routerTable->update(unreachableNodes, m_selfRouterNodeInfo, entry) && !updated)
     {
         updated = true;
     }
     if (!updated)
     {
         SERVICE2_LOG(DEBUG) << LOG_BADGE("joinRouterTable") << LOG_DESC("router table not updated")
-                            << LOG_KV("dst", printShortHex(_generatedFrom));
+                            << LOG_KV("dst", printShortHex(_generatedFrom.p2pID));
         return;
     }
     onP2PNodesUnreachable(unreachableNodes);
     m_statusSeq++;
     broadcastRouterSeq();
+    SERVICE2_LOG(DEBUG) << LOG_BADGE("joinRouterTable") << LOG_DESC("router table updated")
+                        << LOG_KV("dst", printShortHex(_generatedFrom.p2pID));
 }
 
 // receive routerTable request from peer
@@ -193,6 +198,15 @@ void ServiceV2::onReceiveRouterSeq(
                               << LOG_KV("message", _error.what());
         return;
     }
+    // the protocol not negotiated, return directly
+    if (!_session->negotiated())
+    {
+        SERVICE2_LOG(WARNING) << LOG_BADGE("onReceiveRouterSeq: return directly for not negotiated")
+                              << LOG_KV("peer", _session->shortP2pID())
+                              << LOG_KV("seq", m_statusSeq);
+        return;
+    }
+
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_message->payload().data()));
     if (!tryToUpdateSeq(_session->p2pID(), statusSeq))
@@ -211,17 +225,19 @@ void ServiceV2::onReceiveRouterSeq(
 
 void ServiceV2::onNewSession(P2PSession::Ptr _session)
 {
-    std::set<std::string> unreachableNodes;
-    auto entry = m_routerTableFactory->createRouterEntry();
-    entry->setDstNode(_session->p2pID());
-    entry->setDistance(0);
-    if (!m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry))
+    if (!_session->negotiated())
     {
-        SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("routerTable not changed")
-                           << LOG_KV("dst", _session->shortP2pID());
+        SERVICE2_LOG(INFO) << LOG_DESC("onNewSession return directly for negotiate not completed");
         return;
     }
-    if (!m_routerTable->update(unreachableNodes, m_selfInfo.rawP2pID, entry))
+    std::set<std::string> unreachableNodes;
+    auto entry = m_routerTableFactory->createRouterEntry();
+    entry->setDstNode(generateRouterNodeID(_session));
+    SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("create router entry")
+                       << LOG_KV("dst", printShortHex(entry->dstNode().p2pID))
+                       << LOG_KV("protocolVersion", _session->protocolInfo()->version());
+    entry->setDistance(0);
+    if (!m_routerTable->update(unreachableNodes, m_selfRouterNodeInfo, entry))
     {
         SERVICE2_LOG(INFO) << LOG_BADGE("onNewSession") << LOG_DESC("routerTable not changed")
                            << LOG_KV("dst", _session->shortP2pID());
@@ -283,7 +299,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
                                 << LOG_DESC("sendMessage to dstNode")
                                 << LOG_KV("from", _message->srcP2PNodeIDView())
                                 << LOG_KV("to", _message->dstP2PNodeIDView())

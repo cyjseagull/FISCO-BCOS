@@ -45,20 +45,80 @@ public:
     RouterTableEntry& operator=(RouterTableEntry&&) = delete;
     ~RouterTableEntry() override = default;
 
-    void setDstNode(std::string const& _dstNode) override { m_inner()->dstNode = _dstNode; }
-    void setNextHop(std::string const& _nextHop) override { m_inner()->nextHop = _nextHop; }
-    void clearNextHop() override { m_inner()->nextHop = std::string(); }
+    void setDstNode(RouterNodeID const& _dstNode) override
+    {
+        m_dstNode = _dstNode;
+        // for compatibility
+        m_inner()->dstNode = _dstNode.rawP2pID;
+    }
+    void setNextHop(RouterNodeID const& _nextHop) override
+    {
+        m_nextHop = _nextHop;
+        // for compatibility
+        m_inner()->nextHop = _nextHop.rawP2pID;
+    }
+    void clearNextHop() override
+    {
+        m_nextHop.reset();
+        m_inner()->nextHop = std::string();
+    }
     void setDistance(int32_t _distance) override { m_inner()->distance = _distance; }
     void incDistance(int32_t _deltaDistance) override { m_inner()->distance += _deltaDistance; }
 
-    std::string const& dstNode() const override { return m_inner()->dstNode; }
-    std::string const& nextHop() const override { return m_inner()->nextHop; }
+    RouterNodeID const& dstNode() const override { return m_dstNode; }
+    RouterNodeID const& nextHop() const override { return m_nextHop; }
     int32_t distance() const override { return m_inner()->distance; }
 
     bcostars::RouterTableEntry const& inner() const { return *(m_inner()); }
 
+    // encode dstNodeInfo and nextHopNodeInfo into m_inner before encode
+    virtual void prepareToEncode()
+    {
+        assignNodeIDInfo(m_inner()->dstNodeInfo, m_dstNode);
+        assignNodeIDInfo(m_inner()->nextHopInfo, m_nextHop);
+    }
+    // populate RouterNodeID after decode
+    void populateNodeIDInfo()
+    {
+        auto ret = populateRouterNodeID(m_dstNode, m_inner()->dstNodeInfo);
+        // the old node case, use dstNode directly
+        if (!ret)
+        {
+            m_dstNode.p2pID = m_inner()->dstNode;
+            m_dstNode.rawP2pID = m_inner()->dstNode;
+        }
+        ret = populateRouterNodeID(m_nextHop, m_inner()->nextHopInfo);
+        // the old node case, use nextHop directly
+        if (!ret)
+        {
+            m_nextHop.p2pID = m_inner()->nextHop;
+            m_nextHop.rawP2pID = m_inner()->nextHop;
+        }
+    }
+
+private:
+    void assignNodeIDInfo(bcostars::NodeIDInfo& nodeIDInfo, RouterNodeID const& routerNodeID)
+    {
+        nodeIDInfo.p2pID = routerNodeID.p2pID;
+        nodeIDInfo.rawP2pID = routerNodeID.rawP2pID;
+    }
+
+    bool populateRouterNodeID(RouterNodeID& routerNodeID, bcostars::NodeIDInfo const& nodeIDInfo)
+    {
+        // the nodeInfo not setted, the old node case
+        if (nodeIDInfo.p2pID.empty() && nodeIDInfo.rawP2pID.empty())
+        {
+            return false;
+        }
+        routerNodeID.p2pID = nodeIDInfo.p2pID;
+        routerNodeID.rawP2pID = nodeIDInfo.rawP2pID;
+        return true;
+    }
+
 private:
     std::function<bcostars::RouterTableEntry*()> m_inner;
+    RouterNodeID m_dstNode;
+    RouterNodeID m_nextHop;
 };
 
 class RouterTable : public RouterTableInterface
@@ -76,7 +136,7 @@ public:
     void encode(bcos::bytes& _encodedData) override;
     void decode(bcos::bytesConstRef _decodedData) override;
 
-    std::map<std::string, RouterTableEntryInterface::Ptr> routerEntries() const override
+    std::map<RouterNodeID, RouterTableEntryInterface::Ptr> routerEntries() const override
     {
         bcos::ReadGuard l(x_routerEntries);
         return m_routerEntries;
@@ -88,12 +148,12 @@ public:
         return m_routerEntries.size();
     }
     // append the unreachableNodes into param _unreachableNodes
-    bool update(std::set<std::string>& _unreachableNodes, std::string const& _generatedFrom,
+    bool update(std::set<std::string>& _unreachableNodes, RouterNodeID const& _generatedFrom,
         RouterTableEntryInterface::Ptr _entry) override;
     // append the unreachableNodes into param _unreachableNodes
     bool erase(std::set<std::string>& _unreachableNodes, std::string const& _p2pNodeID) override;
 
-    void setNodeInfo(P2PInfo const& _p2pInfo) override { m_selfInfo = _p2pInfo; }
+    void setNodeInfo(RouterNodeID const& _p2pInfo) override { m_selfInfo = _p2pInfo; }
     std::string const& nodeID() const override { return m_selfInfo.p2pID; }
 
     void setUnreachableDistance(int _unreachableDistance) override
@@ -104,24 +164,19 @@ public:
     std::string getNextHop(std::string const& _nodeID) override;
     std::set<std::string> getAllReachableNode() override;
 
+protected:
     bool updateDstNodeEntry(
-        std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
+        RouterNodeID const& _generatedFrom, RouterTableEntryInterface::Ptr _entry);
     void updateDistanceForAllRouterEntries(std::set<std::string>& _unreachableNodes,
-        std::string const& _nextHop, int32_t _newDistance);
-
-    // update the nodeID
-    void updateNodeID(std::string const& oldNodeID, std::string const& newNodeID) override;
+        RouterNodeID const& _nextHop, int32_t _newDistance);
 
 private:
-    bool nodeSelf(std::string const& p2pID)
-    {
-        return p2pID == m_selfInfo.p2pID || p2pID == m_selfInfo.rawP2pID;
-    }
+    bool nodeSelf(RouterNodeID const& p2pID) { return m_selfInfo == p2pID; }
 
 private:
-    P2PInfo m_selfInfo;
+    RouterNodeID m_selfInfo;
     std::function<bcostars::RouterTable*()> m_inner;
-    std::map<std::string, RouterTableEntryInterface::Ptr> m_routerEntries;
+    std::map<RouterNodeID, RouterTableEntryInterface::Ptr> m_routerEntries;
     mutable SharedMutex x_routerEntries;
 
     int m_unreachableDistance = 10;

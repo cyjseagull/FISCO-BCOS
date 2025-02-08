@@ -35,6 +35,11 @@
 
 namespace bcos
 {
+/// For RSA public key, the prefix length is 18 in hex, used for print log graciously
+constexpr static size_t RSA_PUBLIC_KEY_PREFIX = 18;
+constexpr static size_t RSA_PUBLIC_KEY_TRUNC = 8;
+constexpr static size_t RSA_PUBLIC_KEY_TRUNC_LENGTH = 26;
+
 template <class Binary, class Out = std::string>
     requires RANGES::range<Binary> && RANGES::sized_range<Binary>
 Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
@@ -461,15 +466,23 @@ std::string toQuantity(BigNumber auto number)
     return toQuantity(bytes);
 }
 
-inline std::string printShortHex(std::string_view data)
+inline std::string printShortHex(std::string const& data)
 {
-    auto startIt = data.begin();
-    auto endIt = data.end();
-    if (data.size() > 4)
+    if (data.length() == 0)
     {
-        endIt = startIt + 4 * sizeof(byte);
+        return "empty";
     }
-    return toHex(std::span(startIt, endIt)) + "...";
+    if (data.length() < 33)
+    {
+        auto startIt = data.begin();
+        auto endIt = data.end();
+        if (data.size() > 4)
+        {
+            endIt = startIt + 4 * sizeof(byte);
+        }
+        return *toHexString(startIt, endIt, "hash-");
+    }
+    return data.substr(RSA_PUBLIC_KEY_PREFIX, RSA_PUBLIC_KEY_TRUNC);
 }
 
 }  // namespace bcos

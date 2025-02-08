@@ -39,7 +39,7 @@ public:
 
     virtual bool active() { return m_run; }
     P2pID id() const override { return m_selfInfo.p2pID; }
-
+    virtual P2pID const& rawID() const { return m_selfInfo.rawP2pID; }
     virtual void onConnect(
         NetworkException e, P2PInfo const& p2pInfo, std::shared_ptr<SessionFace> session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
@@ -164,6 +164,7 @@ public:
     void updatePeerWhitelist(const std::set<std::string>& _strList, const bool _enable) override;
 
 protected:
+    virtual bool selfNode(std::string const& nodeID) { return (m_selfInfo == P2PInfo(nodeID)); }
     virtual void sendMessageToSession(P2PSession::Ptr _p2pSession, P2PMessage::Ptr _msg,
         Options = Options(), CallbackFuncWithSession = CallbackFuncWithSession());
 

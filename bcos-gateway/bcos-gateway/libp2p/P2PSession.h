@@ -46,7 +46,8 @@ public:
         }
         return m_p2pInfo->p2pID;
     }
-    virtual std::string shortP2pID() { return printShortHex(m_p2pInfo->p2pID); }
+    std::string shortP2pID() const { return printShortHex(m_p2pInfo->p2pID); }
+    std::string printRawP2pID() const { return printShortHex(m_p2pInfo->rawP2pID); }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(P2PInfo const& p2pInfo)
     {
@@ -67,9 +68,14 @@ public:
     // empty when negotiate failed or negotiate unfinished
     virtual bcos::protocol::ProtocolInfo::ConstPtr protocolInfo() const
     {
-        // TODO: check if the lock below is necessary?
-        // ReadGuard l(x_protocolInfo);
+        ReadGuard l(x_protocolInfo);
         return m_protocolInfo;
+    }
+
+    virtual bool negotiated() const
+    {
+        ReadGuard l(x_protocolInfo);
+        return m_protocolInfo && m_protocolInfo->negotiated();
     }
 
 private:

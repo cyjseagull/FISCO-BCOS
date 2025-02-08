@@ -35,6 +35,7 @@ void RouterTable::encode(bcos::bytes& _encodedData)
     for (auto const& it : m_routerEntries)
     {
         auto entry = std::dynamic_pointer_cast<RouterTableEntry>(it.second);
+        entry->prepareToEncode();
         m_inner()->routerEntries.emplace_back(entry->inner());
     }
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
@@ -54,6 +55,7 @@ void RouterTable::decode(bcos::bytesConstRef _decodedData)
     {
         auto entry =
             std::make_shared<RouterTableEntry>([m_entry = it]() mutable { return &m_entry; });
+        entry->populateNodeIDInfo();
         m_routerEntries.insert(std::make_pair(entry->dstNode(), entry));
     }
 }
@@ -63,29 +65,30 @@ bool RouterTable::erase(std::set<std::string>& _unreachableNodes, std::string co
     bool updated = false;
     WriteGuard writeGuard(x_routerEntries);
     // erase router-entry of the _p2pNodeID
-    auto it = m_routerEntries.find(_p2pNodeID);
+    auto it = m_routerEntries.find(RouterNodeID(_p2pNodeID));
     if (it != m_routerEntries.end())
     {
         // Note: reset the distance to m_unreachableDistance, to notify that the _p2pNodeID is
         // unreachable
         it->second->setDistance(m_unreachableDistance);
         it->second->clearNextHop();
-        _unreachableNodes.insert(it->second->dstNode());
+        _unreachableNodes.insert(it->second->dstNode().p2pID);
 
         SERVICE_ROUTER_LOG(INFO) << LOG_BADGE("erase") << LOG_DESC("make the router unreachable")
-                                 << LOG_KV("dst", _p2pNodeID)
+                                 << LOG_KV("dst", printShortHex(_p2pNodeID))
                                  << LOG_KV("distance", it->second->distance())
                                  << LOG_KV("size", m_routerEntries.size());
         updated = true;
     }
     // update the router-entry with nextHop equal to _p2pNodeID to be unreachable
-    updateDistanceForAllRouterEntries(_unreachableNodes, _p2pNodeID, m_unreachableDistance);
+    updateDistanceForAllRouterEntries(
+        _unreachableNodes, RouterNodeID(_p2pNodeID), m_unreachableDistance);
     return updated;
 }
 
 // Note: the caller (namely erase) already owner a write lock
 void RouterTable::updateDistanceForAllRouterEntries(
-    std::set<std::string>& _unreachableNodes, std::string const& _nextHop, int32_t _newDistance)
+    std::set<std::string>& _unreachableNodes, RouterNodeID const& _nextHop, int32_t _newDistance)
 {
     for (auto& it : m_routerEntries)
     {
@@ -97,13 +100,13 @@ void RouterTable::updateDistanceForAllRouterEntries(
             if (entry->distance() >= m_unreachableDistance)
             {
                 entry->clearNextHop();
-                _unreachableNodes.insert(entry->dstNode());
+                _unreachableNodes.insert(entry->dstNode().p2pID);
             }
             SERVICE_ROUTER_LOG(INFO)
                 << LOG_BADGE("updateDistanceForAllRouterEntries")
                 << LOG_DESC("update entry since the nextHop distance has been updated")
                 << LOG_KV("dst", entry->printDstNode())
-                << LOG_KV("nextHop", printShortHex(_nextHop))
+                << LOG_KV("nextHop", printShortHex(_nextHop.p2pID))
                 << LOG_KV("distance", entry->distance()) << LOG_KV("oldDistance", oldDistance)
                 << LOG_KV("size", m_routerEntries.size());
         }
@@ -111,14 +114,14 @@ void RouterTable::updateDistanceForAllRouterEntries(
 }
 
 bool RouterTable::update(std::set<std::string>& _unreachableNodes,
-    std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
+    RouterNodeID const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
 {
     if (c_fileLogLevel <= TRACE) [[unlikely]]
     {
         SERVICE_ROUTER_LOG(TRACE) << LOG_BADGE("update") << LOG_DESC("receive entry")
-                                  << LOG_KV("dst", printShortHex(_entry->dstNode()))
+                                  << LOG_KV("dst", printShortHex(_entry->dstNode().p2pID))
                                   << LOG_KV("distance", _entry->distance())
-                                  << LOG_KV("from", printShortHex(_generatedFrom));
+                                  << LOG_KV("from", printShortHex(_generatedFrom.p2pID));
     }
     auto ret = updateDstNodeEntry(_generatedFrom, _entry);
     // the dst entry has not been updated
@@ -139,7 +142,7 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     if (_newDistance >= m_unreachableDistance)
     {
         currentEntry->clearNextHop();
-        _unreachableNodes.insert(_entry->dstNode());
+        _unreachableNodes.insert(_entry->dstNode().p2pID);
     }
     // the dst entry has updated, update the distance of the router-entries with nextHop equal to
     // dstNode
@@ -148,12 +151,15 @@ bool RouterTable::update(std::set<std::string>& _unreachableNodes,
     {
         currentEntry->clearNextHop();
     }
+    // Note: the dstNode maybe changed when receive both short/long nodeID from the new-node that
+    // should overrite the old long nodeID
+    currentEntry->setDstNode(_entry->dstNode());
     updateDistanceForAllRouterEntries(_unreachableNodes, _entry->dstNode(), _newDistance);
     return true;
 }
 
 bool RouterTable::updateDstNodeEntry(
-    std::string const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
+    RouterNodeID const& _generatedFrom, RouterTableEntryInterface::Ptr _entry)
 {
     UpgradableGuard upgradableGuard(x_routerEntries);
     // the node self
@@ -237,7 +243,7 @@ std::string RouterTable::getNextHop(std::string const& _nodeID)
 {
     std::string emptyNextHop;
     ReadGuard readGuard(x_routerEntries);
-    auto it = m_routerEntries.find(_nodeID);
+    auto it = m_routerEntries.find(RouterNodeID(_nodeID));
     if (it == m_routerEntries.end())
     {
         return emptyNextHop;
@@ -246,7 +252,7 @@ std::string RouterTable::getNextHop(std::string const& _nodeID)
     {
         return emptyNextHop;
     }
-    return it->second->nextHop();
+    return it->second->nextHop().p2pID;
 }
 
 std::set<std::string> RouterTable::getAllReachableNode()
@@ -258,7 +264,7 @@ std::set<std::string> RouterTable::getAllReachableNode()
         auto entry = it.second;
         if (entry->distance() < m_unreachableDistance)
         {
-            reachableNodes.insert(entry->dstNode());
+            reachableNodes.insert(entry->dstNode().p2pID);
         }
     }
 
@@ -273,35 +279,4 @@ std::set<std::string> RouterTable::getAllReachableNode()
     }
 
     return reachableNodes;
-}
-
-void RouterTable::updateNodeID(std::string const& oldNodeID, std::string const& newNodeID)
-{
-    if (newNodeID == oldNodeID)
-    {
-        return;
-    }
-    SERVICE_ROUTER_LOG(INFO) << LOG_DESC("updateNodeID") << LOG_KV("old", oldNodeID)
-                             << LOG_KV("new", newNodeID);
-    RouterTableEntryInterface::Ptr existedEntry;
-    {
-        bcos::WriteGuard l(x_routerEntries);
-        auto it = m_routerEntries.find(oldNodeID);
-        if (it != m_routerEntries.end())
-        {
-            existedEntry = it->second;
-            m_routerEntries.erase(it);
-            // update the dstNodeID
-            m_routerEntries.insert(std::make_pair(newNodeID, existedEntry));
-        }
-    }
-    // update corresponding the nextHop to newNodeID for all entries
-    bcos::ReadGuard l(x_routerEntries);
-    for (auto const& it : m_routerEntries)
-    {
-        if (it.second && it.second->nextHop() == oldNodeID)
-        {
-            it.second->setNextHop(newNodeID);
-        }
-    }
 }
