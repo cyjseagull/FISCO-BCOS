@@ -113,6 +113,7 @@ public:
 
     std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _nodeID) override
     {
+        bcos::ReadGuard l(x_sessions);
         auto accessor = m_sessions.find(P2PInfo(_nodeID));
         if (accessor != m_sessions.end())
         {
@@ -219,6 +220,11 @@ protected:
         }
     }
 
+    virtual SessionsType copySessions()
+    {
+        bcos::ReadGuard l(x_sessions);
+        return m_sessions;
+    }
     friend class ServiceV2;
 
 private:
@@ -230,8 +236,10 @@ private:
     bcos::RecursiveMutex x_nodes;
     std::shared_ptr<Host> m_host;
 
-    using SessionsType = tbb::concurrent_map<P2PInfo, P2PSession::Ptr>;
+    using SessionsType = std::map<P2PInfo, P2PSession::Ptr>;
     SessionsType m_sessions;
+    bcos::SharedMutex x_sessions;
+
     // tbb::concurrent_hash_map<P2pID, P2PSession::Ptr> m_seesions;
     std::shared_ptr<MessageFactory> m_messageFactory;
 

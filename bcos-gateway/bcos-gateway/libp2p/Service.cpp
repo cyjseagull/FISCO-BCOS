@@ -83,11 +83,11 @@ void Service::stop()
         m_host->stop();
 
         /// disconnect sessions
+        bcos::WriteGuard l(x_sessions);
         for (auto& session : m_sessions)
         {
             session.second->stop(ClientQuit);
         }
-
         /// clear sessions
         m_sessions.clear();
     }
@@ -128,10 +128,15 @@ void Service::heartBeat()
                 service->onConnect(std::move(error), p2pInfo, std::move(session));
             });
     }
-
+    SessionsType sessions;
+    {
+        bcos::ReadGuard l(x_sessions);
+        sessions = m_sessions;
+    }
     SERVICE_LOG(INFO) << METRIC << LOG_DESC("heartBeat")
-                      << LOG_KV("connected count", m_sessions.size());
-    for (auto& [p2pNodeInfo, session] : m_sessions)
+                      << LOG_KV("connected count", sessions.size());
+
+    for (auto& [p2pNodeInfo, session] : sessions)
     {
         auto queueSize = session->session()->writeQueueSize();
         if (queueSize > 0)
@@ -232,8 +237,8 @@ void Service::onConnect(
     p2pSession->session()->setBeforeMessageHandler([this](SessionFace& session, Message& message) {
         return onBeforeMessage(session, message);
     });
-    auto accessor = m_sessions.find(p2pInfo);
-    if (accessor != m_sessions.end() && accessor->second->active())
+    auto existedSession = getP2PSessionByNodeId(p2pInfo.p2pID);
+    if (existedSession && existedSession->active())
     {
         SERVICE_LOG(INFO) << "Disconnect duplicate peer" << LOG_KV("p2pid", printShortHex(p2pID));
         updateStaticNodes(session->socket(), p2pInfo.rawP2pID);
@@ -243,13 +248,17 @@ void Service::onConnect(
     p2pSession->start();
     asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pInfo.rawP2pID);
-    if (accessor != m_sessions.end())
+    if (existedSession)
     {
-        accessor->second = p2pSession;
+        bcos::WriteGuard l(x_sessions);
+        m_sessions[p2pInfo] = p2pSession;
     }
     else
     {
-        m_sessions.emplace(p2pInfo, p2pSession);
+        {
+            bcos::WriteGuard l(x_sessions);
+            m_sessions.insert(std::make_pair(p2pInfo, p2pSession));
+        }
         callNewSessionHandlers(p2pSession);
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("p2pid", printShortHex(p2pID))
@@ -264,16 +273,18 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
     {
         handler(e, p2pSession);
     }
-    auto accessor = m_sessions.find(P2PInfo(p2pSession->p2pID()));
-    if (accessor != m_sessions.end() && accessor->second == p2pSession)
+    auto session = getP2PSessionByNodeId(p2pSession->p2pID());
+    if (session && session == p2pSession)
     {
         SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
                            << LOG_KV("p2pid", p2pSession->shortP2pID())
                            << LOG_KV("rawP2pID", p2pSession->printRawP2pID())
                            << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
-
-        m_sessions.unsafe_erase(accessor);
+        {
+            bcos::WriteGuard l(x_sessions);
+            m_sessions.erase(P2PInfo(p2pSession->p2pID()));
+        }
         callDeleteSessionHandlers(p2pSession);
 
         if (e.errorCode() == P2PExceptionType::DuplicateSession)
@@ -497,7 +508,8 @@ P2PMessage::Ptr Service::sendMessageByNodeID(P2pID nodeID, P2PMessage::Ptr messa
 void Service::asyncSendMessageByEndPoint(NodeIPEndpoint const& _endpoint, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
-    for (auto const& it : m_sessions)
+    auto sessions = copySessions();
+    for (auto const& it : sessions)
     {
         if (it.second->session()->nodeIPEndpoint() == _endpoint)
         {
@@ -518,13 +530,7 @@ void Service::asyncSendMessageByNodeID(
             return;
         }
 
-        P2PSession::Ptr session;
-        auto accessor = m_sessions.find(P2PInfo(nodeID));
-        if (accessor != m_sessions.end() && accessor->second->active())
-        {
-            session = accessor->second;
-        }
-
+        auto session = getP2PSessionByNodeId(nodeID);
         if (session)
         {
             if (message->seq() == 0)
@@ -561,7 +567,8 @@ void Service::asyncBroadcastMessage(P2PMessage::Ptr message, Options options)
 {
     try
     {
-        for (auto& session : m_sessions)
+        auto sessions = copySessions();
+        for (auto& session : sessions)
         {
             // TODO: determine by version
             asyncSendMessageByNodeID(session.second->p2pID(), message, {}, options);
@@ -579,7 +586,8 @@ P2PInfos Service::sessionInfos()
     P2PInfos infos;
     try
     {
-        for (auto const& session : m_sessions)
+        auto sessions = copySessions();
+        for (auto const& session : sessions)
         {
             infos.push_back(session.second->p2pInfo());
         }
@@ -594,8 +602,8 @@ P2PInfos Service::sessionInfos()
 
 bool Service::isConnected(P2pID const& nodeID) const
 {
-    auto accessor = m_sessions.find(P2PInfo(nodeID));
-    if (accessor != m_sessions.end() && accessor->second->active())
+    auto session = getP2PSessionByNodeId(nodeID);
+    if (session && session->active())
     {
         return true;
     }
@@ -764,7 +772,8 @@ void Service::updatePeerBlacklist(const std::set<std::string>& _strList, const b
     // disconnect nodes in the blacklist
     if (_enable)
     {
-        for (const auto& session : m_sessions)
+        auto sessions = copySessions();
+        for (const auto& session : sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() == _strList.find(p2pIdWithoutExtInfo))
@@ -789,7 +798,8 @@ void Service::updatePeerWhitelist(const std::set<std::string>& _strList, const b
     // disconnect nodes not in the whitelist
     if (_enable)
     {
-        for (auto& session : m_sessions)
+        auto sessions = copySessions();
+        for (auto& session : sessions)
         {
             auto p2pIdWithoutExtInfo = session.second->p2pInfo().p2pIDWithoutExtInfo;
             if (_strList.end() != _strList.find(p2pIdWithoutExtInfo))
@@ -816,13 +826,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::Service::sendMessageByNodeID(
         co_return {};
     }
 
-    P2PSession::Ptr session;
-    auto accessor = m_sessions.find(P2PInfo(nodeID));
-    if (accessor != m_sessions.end())
-    {
-        session = accessor->second;
-    }
-
+    auto session = getP2PSessionByNodeId(nodeID);
     if (!session)
     {
         BOOST_THROW_EXCEPTION(

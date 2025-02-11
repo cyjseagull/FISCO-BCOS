@@ -312,7 +312,7 @@ void ServiceV2::asyncSendMessageByNodeIDWithMsgForward(
     // with nextHop, send the message to nextHop
     if (c_fileLogLevel == TRACE) [[unlikely]]
     {
-        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+        SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeIDWithMsgForward")
                             << LOG_DESC("forwardMessage to nextHop")
                             << LOG_KV("from", _message->srcP2PNodeIDView())
                             << LOG_KV("to", _message->dstP2PNodeIDView())
@@ -474,7 +474,7 @@ bcos::task::Task<Message::Ptr> bcos::gateway::ServiceV2::sendMessageByNodeID(
     {
         if (c_fileLogLevel == TRACE) [[unlikely]]
         {
-            SERVICE2_LOG(TRACE) << LOG_BADGE("asyncSendMessageByNodeID")
+            SERVICE2_LOG(TRACE) << LOG_BADGE("sendMessageByNodeID")
                                 << LOG_DESC("sendMessage to dstNode")
                                 << LOG_KV("from", message.srcP2PNodeIDView())
                                 << LOG_KV("to", message.dstP2PNodeIDView())
